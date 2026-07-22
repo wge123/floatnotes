@@ -1,11 +1,17 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_nspanel::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tokio::sync::broadcast;
 
 use window::WebviewWindowExt;
 
 mod commands;
+pub mod server;
+pub mod store;
 mod window;
+
+/// Keeps the notes-dir watcher alive for the app's lifetime.
+struct WatcherHandle(#[allow(dead_code)] std::sync::Mutex<notify::RecommendedWatcher>);
 
 pub const PANEL_LABEL: &str = "main";
 const DEFAULT_HOTKEY: &str = "alt+n";
@@ -90,6 +96,22 @@ pub fn run() {
             panel.show();
 
             register_hotkey(app.app_handle());
+
+            // Notes store + localhost server + watcher (contract: S03).
+            let note_store = store::NoteStore::open_default()?;
+            let (tx, _rx) = broadcast::channel::<server::Event>(64);
+            let watcher = server::spawn_watcher(note_store.dir().to_path_buf(), tx.clone())?;
+            app.manage(WatcherHandle(std::sync::Mutex::new(watcher)));
+            let handle = app.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = server::serve(note_store, tx).await {
+                    // Fail loud: log + surface in the panel (no silent
+                    // fallback port), but don't kill the running app.
+                    let message = format!("FloatNotes server failed: {err}");
+                    eprintln!("[floatnotes] {message}");
+                    let _ = handle.emit("floatnotes://server-error", message);
+                }
+            });
 
             Ok(())
         })

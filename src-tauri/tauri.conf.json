@@ -5,7 +5,7 @@
   "identifier": "com.willem.floatnotes",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:4949",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },

@@ -14,10 +14,14 @@ export default defineConfig(async () => ({
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
+  // Vite owns 1420 (Tauri convention); the in-app axum server owns 4949 and
+  // proxies here in dev so http://localhost:4949/ always renders the UI.
   server: {
-    port: 4949,
+    port: 1420,
     strictPort: true,
-    host: host || false,
+    // Explicit IPv4 loopback: Node 22 otherwise binds [::1] only, which the
+    // axum dev proxy (127.0.0.1:1420) can't reach.
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",

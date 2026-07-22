@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# note — quick inbox capture into FloatNotes.
+#
+#   note some text to remember        # args become the note body
+#   echo "piped text" | note          # or read the body from stdin
+#
+# Primary path: POST /api/notes on the running FloatNotes server (the note
+# gets a "# Inbox <timestamp>" heading, so it files as inbox-*.md and the
+# open app picks it up live over WebSocket). Server down: write the file
+# straight into the notes dir — the filesystem is the source of truth, so
+# the server indexes it on next start.
+set -euo pipefail
+
+port="${FLOATNOTES_PORT:-4949}"
+notes_dir="${FLOATNOTES_DIR:-$HOME/Notes}"
+
+if [ $# -gt 0 ]; then
+  text="$*"
+else
+  text="$(cat)"
+fi
+
+if [ -z "${text//[[:space:]]/}" ]; then
+  echo "usage: note <text>   (or pipe text on stdin)" >&2
+  exit 2
+fi
+
+stamp="$(date '+%Y-%m-%d %H:%M')"
+content="# Inbox ${stamp}
+
+${text}"
+
+# Primary: capture via the API (server derives the inbox-* id from the heading).
+if id="$(
+  jq -n --arg c "$content" '{content: $c}' |
+    curl -sf -X POST "http://localhost:${port}/api/notes" \
+      -H 'Content-Type: application/json' -d @- 2>/dev/null |
+    jq -r .id
+)" && [ -n "$id" ]; then
+  echo "captured → ${notes_dir}/${id}.md"
+  exit 0
+fi
+
+# Fallback: server down — write the file directly.
+mkdir -p "$notes_dir"
+file="${notes_dir}/inbox-$(date +%Y%m%d-%H%M%S).md"
+while [ -e "$file" ]; do
+  file="${notes_dir}/inbox-$(date +%Y%m%d-%H%M%S)-$RANDOM.md"
+done
+printf '%s\n' "$content" >"$file"
+echo "captured (server down) → ${file}"

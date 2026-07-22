@@ -17,8 +17,8 @@ after creation.
 ### Sidecar
 
 `~/Notes/.floatnotes.json` — the single file holding app metadata that must
-not live inside notes: pin state, note order, zoom level. Never contains note
-content.
+not live inside notes: pin state, note order, zoom level, Esc behavior
+(hide vs unfocus). Never contains note content.
 
 ### Trash
 

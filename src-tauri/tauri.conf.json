@@ -12,14 +12,22 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "FloatNotes",
-        "width": 800,
-        "height": 600
+        "width": 420,
+        "height": 640,
+        "resizable": true,
+        "decorations": false,
+        "center": true,
+        "visible": true,
+        "transparent": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

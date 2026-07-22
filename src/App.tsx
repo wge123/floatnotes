@@ -17,6 +17,7 @@ import {
   type OverlayEntry,
 } from "./lib/app-keymap";
 import { saveWithConflictReload } from "./lib/autosave";
+import { connectSync, decideSyncAction } from "./lib/ws";
 import {
   back,
   current,
@@ -40,8 +41,16 @@ const UNDO_TOAST_MS = 5000;
  */
 let bootPromise: Promise<Note> | null = null;
 
-function bootNote(): Promise<Note> {
+function bootNote(deeplinkId: string | null): Promise<Note> {
   bootPromise ??= (async () => {
+    if (deeplinkId) {
+      try {
+        return await api.read(deeplinkId);
+      } catch {
+        // Dead deeplink (note deleted/renamed) — fall through to the normal
+        // boot; App toasts the miss when the booted id differs.
+      }
+    }
     const metas = await api.list(); // newest first
     return metas.length > 0 ? api.read(metas[0].id) : api.create("");
   })();
@@ -81,6 +90,9 @@ function App() {
     sidecarRef.current = sidecar;
   }, [sidecar]);
   const historyRef = useRef<NoteHistory>(emptyHistory);
+  /** Unsaved edits exist (auto-save pending or in flight) — sync policy input. */
+  const dirtyRef = useRef(false);
+  const saveTimer = useRef<number | undefined>(undefined);
 
   const toastTimer = useRef<number | undefined>(undefined);
   const showToast = useCallback((message: string) => {
@@ -121,6 +133,12 @@ function App() {
   // ------------------------------------------------------------ note flow
   /** Open a note; `record` visits it in ⌘[/⌘] history (default true). */
   const openNote = useCallback((next: Note, record = true) => {
+    // Switching notes drops any pending auto-save of the OLD note — flushing
+    // it after the switch would PUT the old content under the new note's id.
+    if (noteRef.current?.id !== next.id) {
+      window.clearTimeout(saveTimer.current);
+      dirtyRef.current = false;
+    }
     setNote(next);
     if (record) historyRef.current = visit(historyRef.current, next.id);
   }, []);
@@ -136,12 +154,18 @@ function App() {
     [openNote, showToast],
   );
 
-  // Boot: most-recent note, or create the empty "Untitled" note (ADR 0002).
+  // Boot: ?note=<id> deeplink when present, else most-recent note, else the
+  // empty "Untitled" note (ADR 0002).
   useEffect(() => {
     let cancelled = false;
-    bootNote()
+    const requested = new URLSearchParams(window.location.search).get("note");
+    bootNote(requested)
       .then((booted) => {
-        if (!cancelled) openNote(booted);
+        if (cancelled) return;
+        openNote(booted);
+        if (requested && booted.id !== requested) {
+          showToast("note not found — opened most recent");
+        }
       })
       .catch((error: unknown) => {
         // Visible failure over a silently empty panel.
@@ -177,8 +201,11 @@ function App() {
               ? { ...n, mtime: outcome.note.mtime, title: outcome.note.title }
               : n,
           );
+          // Clean only if nothing was typed while the PUT was in flight.
+          if (noteRef.current?.content === markdown) dirtyRef.current = false;
         } else {
           // 409 → the disk version wins wholesale.
+          dirtyRef.current = false;
           setNote(outcome.note);
           showToast("reloaded — changed on disk");
         }
@@ -191,9 +218,9 @@ function App() {
     [showToast],
   );
 
-  const saveTimer = useRef<number | undefined>(undefined);
   const onEdit = useCallback(
     (markdown: string) => {
+      dirtyRef.current = true;
       setNote((n) => (n ? { ...n, content: markdown } : n));
       window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(
@@ -228,29 +255,42 @@ function App() {
     [persistSidecar, showToast],
   );
 
+  /** Swap in the most recent surviving note (or a fresh "Untitled"). */
+  const openMostRecentSurvivor = useCallback(async () => {
+    try {
+      const metas = await api.list();
+      openNote(
+        metas.length > 0 ? await api.read(metas[0].id) : await api.create(""),
+      );
+    } catch (error) {
+      setBanner(`FloatNotes could not load notes: ${error}`);
+    }
+  }, [openNote]);
+
   // ------------------------------------------------------ delete + undo
+  /**
+   * Ids WE deleted, so the sync channel's echo of our own DELETE doesn't
+   * double-handle it (deleteWithUndo already swapped notes) or toast
+   * "deleted elsewhere" for a local action.
+   */
+  const locallyDeleted = useRef(new Set<string>());
   const undoTimer = useRef<number | undefined>(undefined);
   const deleteWithUndo = useCallback(
     async (target: Note) => {
+      // Mark BEFORE the DELETE: the server broadcasts before it responds, so
+      // the ws echo can beat the HTTP response.
+      locallyDeleted.current.add(target.id);
       try {
         await api.remove(target.id);
       } catch (error) {
+        locallyDeleted.current.delete(target.id);
         showToast(`delete failed: ${error}`);
         return;
       }
       historyRef.current = purge(historyRef.current, target.id);
       // Deleting the visible note swaps in the most recent survivor.
       if (noteRef.current?.id === target.id) {
-        try {
-          const metas = await api.list();
-          openNote(
-            metas.length > 0
-              ? await api.read(metas[0].id)
-              : await api.create(""),
-          );
-        } catch (error) {
-          setBanner(`FloatNotes could not load notes: ${error}`);
-        }
+        await openMostRecentSurvivor();
       }
       setUndoDelete({
         title: target.title,
@@ -269,8 +309,65 @@ function App() {
         UNDO_TOAST_MS,
       );
     },
-    [openNote, showToast],
+    [openNote, openMostRecentSurvivor, showToast],
   );
+
+  // ---------------------------------------------------------- live sync
+  // One socket per mounted app; events → pure decision table (ws.ts).
+  // NO polling — this channel plus the auto-save 409 path IS the sync story.
+  useEffect(() => {
+    const socket = connectSync((event) => {
+      // Echo of our own DELETE — deleteWithUndo already handled the swap.
+      if (event.type === "note-deleted" && locallyDeleted.current.delete(event.id)) {
+        return;
+      }
+      const openNow = noteRef.current;
+      const action = decideSyncAction(
+        event,
+        openNow
+          ? { id: openNow.id, mtime: openNow.mtime, dirty: dirtyRef.current }
+          : null,
+      );
+      switch (action.kind) {
+        case "ignore":
+          break;
+        case "reload":
+          // Silent reload — same note id, so the Editor stays mounted and
+          // its caret guard applies only genuinely different content.
+          api
+            .read(action.id)
+            .then((fresh) => {
+              setNote((n) =>
+                // Still the same note and still clean — a switch or a
+                // keystroke during the fetch wins over the reload (the
+                // 409 path resolves the dirty case instead).
+                n && n.id === fresh.id && !dirtyRef.current ? fresh : n,
+              );
+            })
+            .catch((error: unknown) => {
+              showToast(`could not reload note: ${error}`);
+            });
+          break;
+        case "open-most-recent":
+          showToast("note deleted elsewhere");
+          historyRef.current = purge(historyRef.current, event.id);
+          void openMostRecentSurvivor();
+          break;
+      }
+    });
+    return () => socket.close();
+  }, [openMostRecentSurvivor, showToast]);
+
+  // ------------------------------------------------------ ?note= deeplink
+  // Keep the address bar shareable: the URL always names the open note.
+  useEffect(() => {
+    if (!note?.id) return;
+    window.history.replaceState(
+      null,
+      "",
+      `?note=${encodeURIComponent(note.id)}`,
+    );
+  }, [note?.id]);
 
   // ------------------------------------------------------------ commands
   const newNote = useCallback(async () => {

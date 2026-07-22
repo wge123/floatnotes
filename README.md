@@ -1,7 +1,23 @@
-# Tauri + React + Typescript
+# FloatNotes
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Floating markdown scratch-notes app for macOS — a free, local-first take on Raycast Notes.
 
-## Recommended IDE Setup
+- **Stack:** Tauri 2 + React + TypeScript + Vite + Tailwind CSS 4, managed with bun
+- **Notes live in** `~/Notes` (override with `FLOATNOTES_DIR`) as plain markdown files
+- **Dev server port:** 4949
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Develop
+
+```sh
+bun install
+bun run tauri dev
+```
+
+## Build / check
+
+```sh
+bun run build                                       # typecheck + bundle frontend
+cargo check --manifest-path src-tauri/Cargo.toml    # fast Rust check
+```
+
+Design decisions are recorded in `docs/adr/`; project conventions in `CLAUDE.md`.

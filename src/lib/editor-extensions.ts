@@ -1,3 +1,4 @@
+import SearchAndReplace from "@sereneinserenade/tiptap-search-and-replace";
 import type { Editor } from "@tiptap/core";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -29,6 +30,10 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       bulletListMarker: "-",
       transformPastedText: true,
       transformCopiedText: true,
+    }),
+    SearchAndReplace.configure({
+      searchResultClass: "search-result", // styled in App.css
+      disableRegex: true, // FindBar is a literal-text find
     }),
     EditorKeymap,
   ];

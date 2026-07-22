@@ -17,6 +17,13 @@ export interface Note extends NoteMeta {
   content: string;
 }
 
+/** Mirror of the server's `.floatnotes.json` sidecar (pins/order/zoom). */
+export interface Sidecar {
+  pins: string[];
+  order: string[];
+  zoom: number | null;
+}
+
 /**
  * PUT carried a stale mtime — the file changed on disk under us. The caller
  * must reload the note (disk wins) and never re-send the stale content.
@@ -91,6 +98,16 @@ export const api = {
 
   remove: (id: string): Promise<void> =>
     request(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** Undo of `remove` (ADR 0004): renames the note back out of `.trash/`. */
+  restore: (id: string): Promise<Note> =>
+    request(`/api/notes/${encodeURIComponent(id)}/restore`, { method: "POST" }),
+
+  /** Pins/order/zoom sidecar — shared across panel + browser UIs. */
+  sidecarLoad: (): Promise<Sidecar> => request("/api/sidecar"),
+
+  sidecarSave: (sidecar: Sidecar): Promise<void> =>
+    request("/api/sidecar", { method: "PUT", body: JSON.stringify(sidecar) }),
 };
 
 export type Api = typeof api;

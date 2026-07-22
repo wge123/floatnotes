@@ -72,6 +72,8 @@ pub fn router(store: NoteStore, tx: broadcast::Sender<Event>) -> Router {
             "/api/notes/{id}",
             get(read_note).put(update_note).delete(delete_note),
         )
+        .route("/api/notes/{id}/restore", axum::routing::post(restore_note))
+        .route("/api/sidecar", get(read_sidecar).put(write_sidecar))
         .route("/ws", get(ws_upgrade))
         .with_state(state)
         .layer(middleware::from_fn(cors));
@@ -264,6 +266,30 @@ async fn delete_note(
 ) -> Result<StatusCode, ApiError> {
     state.store.delete(&id)?;
     broadcast_event(&state.tx, Event::deleted(id));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Undo of DELETE (ADR 0004): rename back out of `.trash/`.
+async fn restore_note(
+    State(state): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<store::Note>, ApiError> {
+    let note = state.store.restore(&id)?;
+    broadcast_event(&state.tx, Event::changed(note.id.clone(), note.mtime));
+    Ok(Json(note))
+}
+
+/// Sidecar (pins / order / zoom). Served over REST so the plain-browser UI
+/// at :4949 shares the same pins as the panel — localStorage would silo them.
+async fn read_sidecar(State(state): State<AppState>) -> Json<store::Sidecar> {
+    Json(state.store.sidecar_load())
+}
+
+async fn write_sidecar(
+    State(state): State<AppState>,
+    Json(sidecar): Json<store::Sidecar>,
+) -> Result<StatusCode, ApiError> {
+    state.store.sidecar_save(&sidecar)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

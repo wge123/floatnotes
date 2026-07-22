@@ -189,6 +189,33 @@ impl NoteStore {
         Ok(())
     }
 
+    /// Undo of `delete` (ADR 0004): rename the trashed file back into place.
+    /// Prefers the exact `{id}.md`; falls back to the newest timestamp-suffixed
+    /// copy (`{id}-<millis>.md`) from a delete-again collision.
+    pub fn restore(&self, id: &str) -> Result<Note, StoreError> {
+        let path = self.path_for(id)?;
+        if path.is_file() {
+            // Already back (e.g. double-undo) — restoring is idempotent.
+            return self.read(id);
+        }
+        let trash = self.dir.join(TRASH_DIR);
+        let mut candidate = trash.join(format!("{id}.md"));
+        if !candidate.is_file() {
+            let prefix = format!("{id}-");
+            candidate = fs::read_dir(&trash)?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with(&prefix) && n.ends_with(".md"))
+                })
+                .max_by_key(|p| file_mtime(p).unwrap_or(0))
+                .ok_or_else(|| StoreError::NotFound(id.to_string()))?;
+        }
+        fs::rename(&candidate, &path)?;
+        self.read(id)
+    }
+
     pub fn sidecar_load(&self) -> Sidecar {
         let path = self.dir.join(SIDECAR_NAME);
         match fs::read_to_string(&path) {
@@ -400,6 +427,38 @@ mod tests {
         ));
         let trashed = store.dir().join(TRASH_DIR).join(format!("{}.md", note.id));
         assert_eq!(std::fs::read_to_string(trashed).unwrap(), "# Bye");
+    }
+
+    #[test]
+    fn restore_renames_back_out_of_trash() {
+        let (_tmp, store) = store();
+        let note = store.create("# Undo me").expect("create");
+        store.delete(&note.id).expect("delete");
+        let restored = store.restore(&note.id).expect("restore");
+        assert_eq!(restored.id, note.id);
+        assert_eq!(restored.content, "# Undo me");
+        // Idempotent: restoring an already-live note just reads it.
+        assert_eq!(store.restore(&note.id).expect("re-restore").id, note.id);
+        // Unknown id stays NotFound.
+        assert!(matches!(
+            store.restore("never-existed"),
+            Err(StoreError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn restore_after_double_delete_picks_the_suffixed_copy() {
+        let (_tmp, store) = store();
+        let note = store.create("# Twice").expect("create");
+        store.delete(&note.id).expect("first delete");
+        store.restore(&note.id).expect("first restore");
+        store.delete(&note.id).expect("second delete");
+        // Simulate the collision layout: exact name occupied by an older copy.
+        let trash = store.dir().join(TRASH_DIR);
+        let exact = trash.join(format!("{}.md", note.id));
+        assert!(exact.is_file());
+        let restored = store.restore(&note.id).expect("restore again");
+        assert_eq!(restored.content, "# Twice");
     }
 
     #[test]

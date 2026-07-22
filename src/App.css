@@ -27,3 +27,9 @@ body {
   min-height: 100%;
   outline: none;
 }
+
+/* ⌘F match highlight (search-and-replace extension, see editor-extensions). */
+.search-result {
+  background: rgb(253 224 71 / 0.6); /* yellow-300/60 */
+  border-radius: 2px;
+}

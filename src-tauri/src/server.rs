@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path as AxumPath, State, WebSocketUpgrade};
-use axum::http::{Request, StatusCode, Uri};
+use axum::http::{header, HeaderValue, Method, Request, StatusCode, Uri};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -72,8 +73,39 @@ pub fn router(store: NoteStore, tx: broadcast::Sender<Event>) -> Router {
             get(read_note).put(update_note).delete(delete_note),
         )
         .route("/ws", get(ws_upgrade))
-        .with_state(state);
+        .with_state(state)
+        .layer(middleware::from_fn(cors));
     add_frontend(router)
+}
+
+/// Permissive CORS: the Tauri webview's page origin (Vite `127.0.0.1:1420`
+/// in dev, `tauri://localhost` in release) differs from this server's, so
+/// its `fetch` calls are cross-origin. The server binds loopback only, so
+/// `*` exposes nothing beyond what any local process can already reach.
+async fn cors(req: Request<Body>, next: Next) -> Response {
+    let response = if req.method() == Method::OPTIONS {
+        StatusCode::NO_CONTENT.into_response() // preflight
+    } else {
+        next.run(req).await
+    };
+    with_cors_headers(response)
+}
+
+fn with_cors_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("content-type"),
+    );
+    response
 }
 
 /// Dev: proxy everything non-API to the Vite server. Release: serve the
@@ -389,6 +421,42 @@ mod tests {
         let (tx, _rx) = broadcast::channel(64);
         let router = router(store.clone(), tx);
         (dir, store, router)
+    }
+
+    #[tokio::test]
+    async fn api_responses_carry_cors_headers_for_the_webview() {
+        let (_tmp, _store, app) = test_app();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/notes")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.headers().get("access-control-allow-origin").unwrap(),
+            "*"
+        );
+
+        // Preflight for PUT/POST/DELETE with a JSON body.
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/api/notes/some-id")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert!(resp
+            .headers()
+            .get("access-control-allow-methods")
+            .is_some());
     }
 
     #[tokio::test]

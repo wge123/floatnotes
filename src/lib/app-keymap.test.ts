@@ -20,9 +20,9 @@ describe("Escape/⌘W layering reducer (resolveChord)", () => {
     });
   });
 
-  it("Escape with an empty overlay stack hides the panel", () => {
+  it("Escape with an empty overlay stack dismisses the panel (App decides hide vs unfocus)", () => {
     expect(resolveChord(0, { key: "Escape", metaKey: false })).toEqual({
-      kind: "hide-panel",
+      kind: "dismiss-panel",
     });
   });
 
@@ -74,7 +74,7 @@ describe("step-06 app chords", () => {
     expect(resolveChord(0, meta("]"))).toEqual({ kind: "history-forward" });
   });
 
-  it("⌘1–9 jump to pins (0-based); ⌘0 is reserved for zoom", () => {
+  it("⌘1–9 jump to pins (0-based)", () => {
     expect(resolveChord(0, meta("1"))).toEqual({
       kind: "pinned-jump",
       index: 0,
@@ -83,6 +83,11 @@ describe("step-06 app chords", () => {
       kind: "pinned-jump",
       index: 8,
     });
+  });
+
+  it("⌘= / ⌘- / ⌘0 zoom in, out, and reset (step 09)", () => {
+    expect(resolveChord(0, meta("="))).toEqual({ kind: "zoom-in" });
+    expect(resolveChord(0, meta("-"))).toEqual({ kind: "zoom-out" });
     expect(resolveChord(0, meta("0"))).toEqual({ kind: "zoom-reset" });
   });
 

@@ -78,7 +78,12 @@ pub fn run() {
             commands::show_panel,
             commands::hide_panel,
             commands::toggle_panel,
-            commands::quit_app
+            commands::unfocus_panel,
+            commands::quit_app,
+            commands::set_screen_share_visible,
+            commands::get_screen_share_visible,
+            commands::set_login_item,
+            commands::get_login_item
         ])
         .setup(|app| {
             // No Dock icon, no app switcher entry — the panel is the app.

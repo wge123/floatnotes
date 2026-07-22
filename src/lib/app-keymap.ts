@@ -8,8 +8,11 @@ import { invoke } from "@tauri-apps/api/core";
  * panel only when the stack is empty. ⌘W always hides. Editor-scoped chords
  * live in lib/editor-keymap.ts, not here.
  *
- * Step 06 chords: ⌘N new · ⌘P switcher · ⇧⌘P pin · ⌘1–9 pinned jump
- * (⌘0 reserved for zoom, step 09) · ⌘[/⌘] history · ⌘K actions · ⌘F find.
+ * Step 06 chords: ⌘N new · ⌘P switcher · ⇧⌘P pin · ⌘1–9 pinned jump ·
+ * ⌘[/⌘] history · ⌘K actions · ⌘F find.
+ * Step 09 chords: ⌘=/⌘- zoom · ⌘0 zoom reset. Esc with no overlays emits
+ * `dismiss-panel` (App decides hide vs unfocus per the sidecar setting);
+ * ⌘W stays a hard hide.
  */
 
 export interface OverlayEntry {
@@ -21,12 +24,15 @@ export type KeymapEffect =
   | { kind: "none" }
   | { kind: "close-top-overlay" }
   | { kind: "hide-panel" }
+  /** Esc with no overlays — App resolves hide vs unfocus (step 09). */
+  | { kind: "dismiss-panel" }
   | { kind: "new-note" }
   | { kind: "toggle-switcher" }
   | { kind: "toggle-pin" }
   /** 0-based index into the pinned list (⌘1 → 0 … ⌘9 → 8). */
   | { kind: "pinned-jump"; index: number }
-  /** ⌘0 — reserved; zoom lands in step 09. */
+  | { kind: "zoom-in" }
+  | { kind: "zoom-out" }
   | { kind: "zoom-reset" }
   | { kind: "history-back" }
   | { kind: "history-forward" }
@@ -52,7 +58,7 @@ export function resolveChord(
   if (chord.key === "Escape" && !chord.metaKey) {
     return overlayDepth > 0
       ? { kind: "close-top-overlay" }
-      : { kind: "hide-panel" };
+      : { kind: "dismiss-panel" };
   }
   if (!chord.metaKey) return { kind: "none" };
 
@@ -77,6 +83,10 @@ export function resolveChord(
       return { kind: "history-back" };
     case "]":
       return { kind: "history-forward" };
+    case "=":
+      return { kind: "zoom-in" };
+    case "-":
+      return { kind: "zoom-out" };
     case "0":
       return { kind: "zoom-reset" };
     default:
@@ -117,6 +127,16 @@ export function hidePanel(): void {
   }
 }
 
+/**
+ * Esc alternative (step 09 setting): keep the panel visible but hand the
+ * keyboard back to the previous app. No-op outside the Tauri webview.
+ */
+export function unfocusPanel(): void {
+  if (inTauri) {
+    void invoke("unfocus_panel");
+  }
+}
+
 export interface AppKeymapHandlers {
   overlayDepth: () => number;
   closeTopOverlay: () => void;
@@ -133,6 +153,7 @@ export function installAppKeymap(handlers: AppKeymapHandlers): () => void {
     if (effect.kind === "close-top-overlay") {
       handlers.closeTopOverlay();
     } else if (effect.kind === "hide-panel") {
+      // ⌘W — unconditional hide; Esc's dismiss-panel flows to onCommand.
       hidePanel();
     } else {
       handlers.onCommand(effect);

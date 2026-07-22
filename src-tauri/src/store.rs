@@ -38,7 +38,7 @@ pub struct Note {
     pub mtime: u64,
 }
 
-/// Pins / order / zoom — app metadata only, never note content.
+/// Pins / order / zoom / Esc behavior — app metadata only, never note content.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Sidecar {
     #[serde(default)]
@@ -47,6 +47,10 @@ pub struct Sidecar {
     pub order: Vec<String>,
     #[serde(default)]
     pub zoom: Option<f64>,
+    /// `"hide"` (default when absent) or `"unfocus"` — what Esc does with no
+    /// overlays open (step 09). Free string: the client owns the vocabulary.
+    #[serde(default, rename = "escBehavior", skip_serializing_if = "Option::is_none")]
+    pub esc_behavior: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -494,11 +498,13 @@ mod tests {
             pins: vec!["a".into()],
             order: vec!["a".into(), "b".into()],
             zoom: Some(1.2),
+            esc_behavior: Some("unfocus".into()),
         };
         store.sidecar_save(&sidecar).expect("save");
         let loaded = store.sidecar_load();
         assert_eq!(loaded.pins, vec!["a"]);
         assert_eq!(loaded.order.len(), 2);
+        assert_eq!(loaded.esc_behavior.as_deref(), Some("unfocus"));
         std::fs::write(store.dir().join(SIDECAR_NAME), "{not json").unwrap();
         let recovered = store.sidecar_load();
         assert!(recovered.pins.is_empty());

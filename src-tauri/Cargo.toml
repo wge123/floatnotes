@@ -35,6 +35,9 @@ tauri-plugin-global-shortcut = { git = "https://github.com/tauri-apps/plugins-wo
 
 [target."cfg(target_os = \"macos\")".dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel.git", rev = "040fd1d9d0c69cb384fa53fe32f1a7a95f0f2cc0" }
+# Login item (ADR 0003): SMAppService register/unregister. objc2 0.6 line,
+# matching tauri-nspanel's re-exported objc2.
+objc2-service-management = { version = "0.3", features = ["SMAppService"] }
 
 [dev-dependencies]
 tempfile = "3"

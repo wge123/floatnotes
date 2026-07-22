@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 
@@ -9,14 +10,18 @@ import NoteSwitcher from "./components/NoteSwitcher";
 import StatusBar from "./components/StatusBar";
 import { api, type Note, type Sidecar } from "./lib/api";
 import {
+  hidePanel,
   installAppKeymap,
   pushOverlay,
   removeOverlay,
   topOverlay,
+  unfocusPanel,
   type AppCommand,
   type OverlayEntry,
 } from "./lib/app-keymap";
 import { saveWithConflictReload } from "./lib/autosave";
+import { toHtml, toPlainText } from "./lib/export";
+import { applyZoom, clampZoom, ZOOM_DEFAULT, zoomIn, zoomOut } from "./lib/zoom";
 import { connectSync, decideSyncAction } from "./lib/ws";
 import {
   back,
@@ -59,6 +64,8 @@ function bootNote(deeplinkId: string | null): Promise<Note> {
 
 type OverlayId = "switcher" | "action-panel" | "find";
 
+const inTauri = "__TAURI_INTERNALS__" in window;
+
 /**
  * App shell (steps 05–06): one visible note wired to the localhost server,
  * plus the notes-UX overlays — ⌘P switcher, ⌘K action panel, ⌘F find,
@@ -78,6 +85,9 @@ function App() {
     order: [],
     zoom: null,
   });
+  // Panel-only toggles (step 09) — session state read from the OS on boot.
+  const [screenShareVisible, setScreenShareVisible] = useState(true);
+  const [loginItem, setLoginItem] = useState(false);
   const editorRef = useRef<TiptapEditor | null>(null);
 
   // Latest values for callbacks that outlive a render (keymap, debounce).
@@ -174,7 +184,9 @@ function App() {
     api
       .sidecarLoad()
       .then((loaded) => {
-        if (!cancelled) setSidecar(loaded);
+        if (cancelled) return;
+        setSidecar(loaded);
+        applyZoom(loaded.zoom);
       })
       .catch((error: unknown) => {
         if (!cancelled) showToast(`could not load pins: ${error}`);
@@ -183,6 +195,18 @@ function App() {
       cancelled = true;
     };
   }, [openNote, showToast]);
+
+  // OS-backed toggle state (step 09) — panel only; the plain browser surface
+  // has no window to hide or login item to manage.
+  useEffect(() => {
+    if (!inTauri) return;
+    invoke<boolean>("get_screen_share_visible")
+      .then(setScreenShareVisible)
+      .catch((error: unknown) => showToast(`screen-share state: ${error}`));
+    invoke<boolean>("get_login_item")
+      .then(setLoginItem)
+      .catch((error: unknown) => showToast(`login-item state: ${error}`));
+  }, [showToast]);
 
   const flushSave = useCallback(
     async (markdown: string) => {
@@ -240,6 +264,19 @@ function App() {
       });
     },
     [showToast],
+  );
+
+  // ---------------------------------------------------------------- zoom
+  /** Apply + persist; `null` stored for the default keeps old sidecars tidy. */
+  const setZoom = useCallback(
+    (next: number) => {
+      applyZoom(next);
+      persistSidecar({
+        ...sidecarRef.current,
+        zoom: next === ZOOM_DEFAULT ? null : next,
+      });
+    },
+    [persistSidecar],
   );
 
   const togglePin = useCallback(
@@ -396,8 +433,22 @@ function App() {
           if (id) void openNoteById(id);
           break;
         }
+        case "zoom-in":
+          setZoom(zoomIn(clampZoom(sidecarRef.current.zoom ?? ZOOM_DEFAULT)));
+          break;
+        case "zoom-out":
+          setZoom(zoomOut(clampZoom(sidecarRef.current.zoom ?? ZOOM_DEFAULT)));
+          break;
         case "zoom-reset":
-          // ⌘0 reserved — zoom ships in step 09.
+          setZoom(ZOOM_DEFAULT);
+          break;
+        case "dismiss-panel":
+          // Esc with no overlays — the sidecar setting decides (step 09).
+          if (sidecarRef.current.escBehavior === "unfocus") {
+            unfocusPanel();
+          } else {
+            hidePanel();
+          }
           break;
         case "history-back": {
           const moved = back(historyRef.current);
@@ -425,7 +476,7 @@ function App() {
           break;
       }
     },
-    [newNote, toggleOverlay, togglePin, openNoteById, openOverlay],
+    [newNote, toggleOverlay, togglePin, openNoteById, openOverlay, setZoom],
   );
 
   // App keymap: Esc closes the top overlay / hides the panel; ⌘W hides;
@@ -516,6 +567,30 @@ function App() {
       },
     },
     {
+      id: "copy-plain",
+      label: "Copy as Plain Text",
+      run: () => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        navigator.clipboard
+          .writeText(toPlainText(editor))
+          .then(() => showToast("plain text copied"))
+          .catch((error: unknown) => showToast(`copy failed: ${error}`));
+      },
+    },
+    {
+      id: "copy-html",
+      label: "Copy as HTML",
+      run: () => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        navigator.clipboard
+          .writeText(toHtml(editor))
+          .then(() => showToast("HTML copied"))
+          .catch((error: unknown) => showToast(`copy failed: ${error}`));
+      },
+    },
+    {
       id: "browse",
       label: "Browse Notes",
       shortcut: "⌘P",
@@ -527,6 +602,67 @@ function App() {
       shortcut: "⌘F",
       run: () => openOverlay("find"),
     },
+    // Panel-only actions (step 09) — meaningless in the plain browser surface.
+    ...(inTauri
+      ? ([
+          {
+            id: "screen-share",
+            label: screenShareVisible
+              ? "Hide from Screen Share"
+              : "Show in Screen Share",
+            run: () => {
+              const next = !screenShareVisible;
+              invoke("set_screen_share_visible", { visible: next })
+                .then(() => {
+                  setScreenShareVisible(next);
+                  showToast(
+                    next ? "visible in screen share" : "hidden from screen share",
+                  );
+                })
+                .catch((error: unknown) =>
+                  showToast(`screen share toggle failed: ${error}`),
+                );
+            },
+          },
+          {
+            id: "login-item",
+            label: loginItem
+              ? "Disable Launch at Login"
+              : "Enable Launch at Login",
+            run: () => {
+              const next = !loginItem;
+              invoke("set_login_item", { enabled: next })
+                .then(() => {
+                  setLoginItem(next);
+                  showToast(
+                    next ? "will launch at login" : "removed from login items",
+                  );
+                })
+                .catch((error: unknown) =>
+                  showToast(`login item failed: ${error}`),
+                );
+            },
+          },
+          {
+            id: "esc-behavior",
+            label:
+              sidecar.escBehavior === "unfocus"
+                ? "Esc: Unfocus (switch to Hide)"
+                : "Esc: Hide (switch to Unfocus)",
+            run: () => {
+              const prev = sidecarRef.current;
+              const next =
+                prev.escBehavior === "unfocus" ? "hide" : "unfocus";
+              persistSidecar({ ...prev, escBehavior: next });
+              showToast(
+                next === "unfocus"
+                  ? "Esc now unfocuses the panel"
+                  : "Esc now hides the panel",
+              );
+            },
+          },
+        ] satisfies Action[])
+      : []),
   ];
 
   return (

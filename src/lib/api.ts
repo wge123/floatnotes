@@ -17,11 +17,17 @@ export interface Note extends NoteMeta {
   content: string;
 }
 
-/** Mirror of the server's `.floatnotes.json` sidecar (pins/order/zoom). */
+/** What Esc does with no overlays open (step 09): hide the panel (default)
+ * or keep it visible and hand the keyboard back to the previous app. */
+export type EscBehavior = "hide" | "unfocus";
+
+/** Mirror of the server's `.floatnotes.json` sidecar (pins/order/zoom/esc). */
 export interface Sidecar {
   pins: string[];
   order: string[];
   zoom: number | null;
+  /** Absent on older sidecars — treat as "hide". */
+  escBehavior?: EscBehavior;
 }
 
 /**

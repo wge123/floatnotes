@@ -680,7 +680,7 @@ function App() {
           {banner}
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
         {note && (
           <Editor
             key={note.id}

@@ -22,10 +22,46 @@ body {
   background: transparent;
 }
 
-/* TipTap fills the note area; focus ring off (the panel is the frame). */
+/* TipTap fills the note area so a click anywhere in the body lands in the
+   editor (caret snaps to the nearest position — end of doc for the empty
+   space below the last line). Flex, not min-height: 100%, which never
+   resolved (no definite height anywhere up the chain). The scroll container
+   in App.tsx is flex-col; both layers stretch from there. */
+.floatnotes-editor {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
 .floatnotes-editor .tiptap {
-  min-height: 100%;
-  outline: none;
+  flex: 1 0 auto;
+  outline: none; /* focus ring off — the panel is the frame */
+}
+
+/* Task lists: checkbox replaces the bullet (prose would render both). */
+.floatnotes-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.floatnotes-editor ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.floatnotes-editor ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+  user-select: none;
+}
+
+.floatnotes-editor ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+}
+
+.floatnotes-editor ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #9ca3af; /* gray-400 */
+  text-decoration: line-through;
 }
 
 /* ⌘F match highlight (search-and-replace extension, see editor-extensions). */

@@ -48,6 +48,34 @@ describe("FORMAT_COMMANDS", () => {
     command("bold").run(ed);
     expect(serializeMarkdown(ed)).toBe("**word**");
   });
+
+  // Regression: ⌘A yields an AllSelection, from which the lift-based toggles
+  // (blockquote + the three lists) wrapped but wouldn't un-wrap. liftableChain
+  // coerces it to a text selection so the second run lifts back out.
+  it("lift-based commands toggle off even under a select-all (AllSelection)", () => {
+    for (const id of ["blockquote", "ordered-list", "bullet-list", "task-list"]) {
+      const cmd = command(id);
+      const ed = createEditor("word");
+      ed.commands.selectAll();
+      cmd.run(ed);
+      expect(cmd.isActive(ed), `${id} on after first run`).toBe(true);
+      ed.commands.selectAll();
+      cmd.run(ed);
+      expect(cmd.isActive(ed), `${id} off after second run`).toBe(false);
+      ed.destroy();
+    }
+  });
+
+  // Regression: markdown has no underline syntax; with Markdown html:false the
+  // mark was silently dropped on save. html:true round-trips it as <u>.
+  it("underline round-trips through markdown as <u>", () => {
+    const ed = createEditor("word");
+    ed.commands.setTextSelection({ from: 1, to: 5 });
+    command("underline").run(ed);
+    expect(serializeMarkdown(ed)).toContain("<u>word</u>");
+    const reloaded = createEditor(serializeMarkdown(ed));
+    expect(reloaded.isActive("underline")).toBe(true);
+  });
 });
 
 describe("headings", () => {

@@ -28,7 +28,10 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     TaskListInputRule,
     Placeholder.configure({ placeholder }),
     Markdown.configure({
-      html: false,
+      // html:true so the Underline mark round-trips as <u> — markdown has no
+      // underline syntax, and with html:false tiptap-markdown silently drops
+      // it on save (warns "underline mark is only available in html mode").
+      html: true,
       bulletListMarker: "-",
       transformPastedText: true,
       transformCopiedText: true,

@@ -1,4 +1,20 @@
 import type { Editor } from "@tiptap/core";
+import { AllSelection } from "@tiptap/pm/state";
+
+/**
+ * ⌘A yields an AllSelection, from which ProseMirror can't compute a lift target
+ * (the range boundaries are the doc edges) — so lift-based toggles (blockquote,
+ * bullet/ordered/task list) wrap but won't un-wrap. Coerce it to an explicit
+ * full-document text selection first; then toggleX can lift back out. Marks and
+ * codeBlock don't lift, so they never hit this and don't need the coercion.
+ */
+function liftableChain(editor: Editor) {
+  const chain = editor.chain().focus();
+  if (editor.state.selection instanceof AllSelection) {
+    chain.setTextSelection({ from: 0, to: editor.state.doc.content.size });
+  }
+  return chain;
+}
 
 /**
  * Format-toolbar command table (Raycast-parity bottom bar).
@@ -70,7 +86,7 @@ export const FORMAT_COMMANDS: readonly FormatCommand[] = [
   {
     id: "blockquote",
     label: "Quote",
-    run: (editor) => editor.chain().focus().toggleBlockquote().run(),
+    run: (editor) => liftableChain(editor).toggleBlockquote().run(),
     isActive: (editor) => editor.isActive("blockquote"),
   },
   {
@@ -82,19 +98,19 @@ export const FORMAT_COMMANDS: readonly FormatCommand[] = [
   {
     id: "ordered-list",
     label: "Numbered List",
-    run: (editor) => editor.chain().focus().toggleOrderedList().run(),
+    run: (editor) => liftableChain(editor).toggleOrderedList().run(),
     isActive: (editor) => editor.isActive("orderedList"),
   },
   {
     id: "bullet-list",
     label: "Bullet List",
-    run: (editor) => editor.chain().focus().toggleBulletList().run(),
+    run: (editor) => liftableChain(editor).toggleBulletList().run(),
     isActive: (editor) => editor.isActive("bulletList"),
   },
   {
     id: "task-list",
     label: "Task List",
-    run: (editor) => editor.chain().focus().toggleTaskList().run(),
+    run: (editor) => liftableChain(editor).toggleTaskList().run(),
     isActive: (editor) => editor.isActive("taskList"),
   },
 ];

@@ -38,6 +38,23 @@ body {
   outline: none; /* focus ring off — the panel is the frame */
 }
 
+/* Tighten list rhythm: prose-sm gives each <li> a big top/bottom margin AND
+   wraps its text in a <p> with its own vertical margin, so bullets and todos
+   stacked with a full blank line between them. Collapse both — items sit one
+   line apart, matching a notes app, not an article. */
+.floatnotes-editor :is(ul, ol) > li {
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+}
+
+/* Bullet/ordered items nest the <p> directly; task items wrap it in a <div>
+   (li > div > p). Reach both so no list type keeps prose's paragraph margin. */
+.floatnotes-editor :is(ul, ol) > li > p,
+.floatnotes-editor ul[data-type="taskList"] > li > div > p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 /* Task lists: checkbox replaces the bullet (prose would render both). */
 .floatnotes-editor ul[data-type="taskList"] {
   list-style: none;
@@ -51,7 +68,7 @@ body {
 
 .floatnotes-editor ul[data-type="taskList"] li > label {
   flex: 0 0 auto;
-  margin-top: 0.3rem;
+  margin-top: 0.1rem; /* nudge the checkbox onto the text baseline */
   user-select: none;
 }
 

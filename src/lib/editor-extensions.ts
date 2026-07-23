@@ -9,6 +9,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 
 import { EditorKeymap } from "./editor-keymap";
+import { TaskListInputRule } from "./task-input-rule";
 
 /**
  * The one extension list every FloatNotes editor instance uses — the React
@@ -24,9 +25,13 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     Link.configure({ openOnClick: false, autolink: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    TaskListInputRule,
     Placeholder.configure({ placeholder }),
     Markdown.configure({
-      html: false,
+      // html:true so the Underline mark round-trips as <u> — markdown has no
+      // underline syntax, and with html:false tiptap-markdown silently drops
+      // it on save (warns "underline mark is only available in html mode").
+      html: true,
       bulletListMarker: "-",
       transformPastedText: true,
       transformCopiedText: true,

@@ -6,8 +6,10 @@ import type { Editor as TiptapEditor } from "@tiptap/react";
 import ActionPanel, { type Action } from "./components/ActionPanel";
 import Editor from "./components/Editor";
 import FindBar from "./components/FindBar";
+import FormatBar from "./components/FormatBar";
 import NoteSwitcher from "./components/NoteSwitcher";
 import StatusBar from "./components/StatusBar";
+import TitleBar from "./components/TitleBar";
 import { api, type Note, type Sidecar } from "./lib/api";
 import {
   hidePanel,
@@ -89,6 +91,11 @@ function App() {
   const [screenShareVisible, setScreenShareVisible] = useState(true);
   const [loginItem, setLoginItem] = useState(false);
   const editorRef = useRef<TiptapEditor | null>(null);
+  // Also in state: FormatBar mounts with the editor, and a ref set during
+  // Editor's onCreate would never trigger the render that shows the bar.
+  const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(
+    null,
+  );
 
   // Latest values for callbacks that outlive a render (keymap, debounce).
   const noteRef = useRef<Note | null>(null);
@@ -667,6 +674,7 @@ function App() {
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden rounded-xl bg-white">
+      <TitleBar title={note?.title ?? "FloatNotes"} />
       {banner && (
         <div className="shrink-0 bg-red-700 px-3 py-2 text-xs text-white">
           {banner}
@@ -680,6 +688,7 @@ function App() {
             onChange={onEdit}
             onReady={(editor) => {
               editorRef.current = editor;
+              setEditorInstance(editor);
             }}
             placeholder="Start typing…"
           />
@@ -691,7 +700,10 @@ function App() {
           onClose={() => closeOverlay("find")}
         />
       )}
-      <StatusBar markdown={note?.content ?? ""} />
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-200 px-2 py-1">
+        {editorInstance ? <FormatBar editor={editorInstance} /> : <span />}
+        <StatusBar markdown={note?.content ?? ""} />
+      </div>
       {overlays.includes("switcher") && (
         <NoteSwitcher
           pins={sidecar.pins}

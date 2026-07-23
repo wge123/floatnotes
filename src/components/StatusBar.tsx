@@ -10,8 +10,9 @@ export interface StatusBarProps {
 }
 
 /**
- * Bottom status bar (contract: S05a): word/char count, click toggles which
- * one is shown.
+ * Word/char count (contract: S05a), click toggles which one is shown.
+ * Renders bare — App's bottom bar owns the container (count sits right of
+ * the format toolbar).
  */
 export default function StatusBar({ markdown }: StatusBarProps) {
   const [mode, setMode] = useState<"words" | "chars">("words");
@@ -22,15 +23,13 @@ export default function StatusBar({ markdown }: StatusBarProps) {
       : `${markdown.length} characters`;
 
   return (
-    <div className="flex shrink-0 justify-end border-t border-gray-200 px-3 py-1">
-      <button
-        type="button"
-        onClick={() => setMode((m) => (m === "words" ? "chars" : "words"))}
-        className="cursor-pointer border-none bg-transparent p-0 text-xs text-gray-500 shadow-none hover:text-gray-800"
-        title="Toggle word/character count"
-      >
-        {label}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={() => setMode((m) => (m === "words" ? "chars" : "words"))}
+      className="shrink-0 cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-xs text-gray-500 shadow-none hover:text-gray-800"
+      title="Toggle word/character count"
+    >
+      {label}
+    </button>
   );
 }

@@ -6,9 +6,11 @@ import {
   HEADING_LEVELS,
   headingCommand,
   inAnyHeading,
+  LINK_SHORTCUT,
   toggleLink,
   type FormatCommand,
 } from "../lib/format";
+import Tooltip from "./Tooltip";
 
 /** Raycast-style glyphs for each command id (label stays the tooltip). */
 const GLYPHS: Record<string, string> = {
@@ -33,29 +35,38 @@ const GLYPH_CLASSES: Record<string, string> = {
 
 interface FormatButtonProps {
   label: string;
+  /** Display chord shown in the hover hint, e.g. "⌘B". */
+  shortcut?: string;
   active: boolean;
   onRun: () => void;
   children: React.ReactNode;
 }
 
-function FormatButton({ label, active, onRun, children }: FormatButtonProps) {
+function FormatButton({
+  label,
+  shortcut,
+  active,
+  onRun,
+  children,
+}: FormatButtonProps) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      // Keep the editor selection: mousedown would steal focus before click.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onRun}
-      className={`flex h-6 min-w-6 items-center justify-center rounded border-none px-1 font-mono text-xs shadow-none ${
-        active
-          ? "bg-gray-200 text-gray-900"
-          : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={label} shortcut={shortcut}>
+      <button
+        type="button"
+        aria-label={shortcut ? `${label} (${shortcut})` : label}
+        aria-pressed={active}
+        // Keep the editor selection: mousedown would steal focus before click.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onRun}
+        className={`flex h-6 min-w-6 items-center justify-center rounded border-none px-1 font-mono text-xs shadow-none ${
+          active
+            ? "bg-gray-200 text-gray-900"
+            : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -101,6 +112,8 @@ export default function FormatBar({ editor }: FormatBarProps) {
       <div ref={popoverRef} className="relative">
         <FormatButton
           label="Heading"
+          // The trigger is a popover, not one chord — name the range it opens.
+          shortcut="⌥⌘1–3"
           active={inAnyHeading(editor)}
           onRun={() => setHeadingsOpen((open) => !open)}
         >
@@ -114,6 +127,7 @@ export default function FormatBar({ editor }: FormatBarProps) {
                 <FormatButton
                   key={cmd.id}
                   label={cmd.label}
+                  shortcut={cmd.shortcut}
                   active={cmd.isActive(editor)}
                   onRun={() => {
                     runCommand(cmd);
@@ -131,6 +145,7 @@ export default function FormatBar({ editor }: FormatBarProps) {
         <Fragment key={cmd.id}>
           <FormatButton
             label={cmd.label}
+            shortcut={cmd.shortcut}
             active={cmd.isActive(editor)}
             onRun={() => runCommand(cmd)}
           >
@@ -142,6 +157,7 @@ export default function FormatBar({ editor }: FormatBarProps) {
           {cmd.id === "code" && (
             <FormatButton
               label="Link"
+              shortcut={LINK_SHORTCUT}
               active={editor.isActive("link")}
               onRun={() => toggleLink(editor, () => window.prompt("Link URL"))}
             >

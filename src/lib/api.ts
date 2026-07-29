@@ -15,6 +15,8 @@ export interface NoteMeta {
 
 export interface Note extends NoteMeta {
   content: string;
+  /** Absolute path of the `.md` file on disk (server-owned; see store.rs). */
+  path: string;
 }
 
 /** What Esc does with no overlays open (step 09): hide the panel (default)

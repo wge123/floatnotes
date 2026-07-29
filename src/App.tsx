@@ -118,6 +118,17 @@ function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
+  /** Absolute .md path to the clipboard — the title bar's click gesture. */
+  const copyPath = useCallback(
+    (path: string) => {
+      navigator.clipboard
+        .writeText(path)
+        .then(() => showToast("file path copied"))
+        .catch((error: unknown) => showToast(`copy failed: ${error}`));
+    },
+    [showToast],
+  );
+
   // ------------------------------------------------------------- overlays
   // The pure stack in app-keymap owns Esc layering; React state only mirrors
   // which overlays are visible.
@@ -674,7 +685,10 @@ function App() {
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden rounded-xl bg-white">
-      <TitleBar title={note?.title ?? "FloatNotes"} />
+      <TitleBar
+        title={note?.title ?? "FloatNotes"}
+        onCopyPath={note ? () => copyPath(note.path) : undefined}
+      />
       {banner && (
         <div className="shrink-0 bg-red-700 px-3 py-2 text-xs text-white">
           {banner}

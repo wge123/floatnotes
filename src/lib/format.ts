@@ -27,9 +27,18 @@ export interface FormatCommand {
   id: string;
   /** Accessible name, doubles as the hover tooltip. */
   label: string;
+  /**
+   * Display form of the chord that runs this command (⌘/⌥/⇧ glyphs, macOS
+   * order ⌃⌥⇧⌘). Must mirror lib/editor-keymap.ts — the keymap is what
+   * actually fires; this is only what the tooltip shows.
+   */
+  shortcut: string;
   run: (editor: Editor) => void;
   isActive: (editor: Editor) => boolean;
 }
+
+/** Chord for the ⌘L link toggle — owned by the keymap, shown by the toolbar. */
+export const LINK_SHORTCUT = "⌘L";
 
 export const HEADING_LEVELS = [1, 2, 3] as const;
 
@@ -37,6 +46,7 @@ export function headingCommand(level: 1 | 2 | 3): FormatCommand {
   return {
     id: `h${level}`,
     label: `Heading ${level}`,
+    shortcut: `⌥⌘${level}`,
     run: (editor) =>
       editor.chain().focus().toggleHeading({ level }).run(),
     isActive: (editor) => editor.isActive("heading", { level }),
@@ -56,60 +66,70 @@ export const FORMAT_COMMANDS: readonly FormatCommand[] = [
   {
     id: "bold",
     label: "Bold",
+    shortcut: "⌘B",
     run: (editor) => editor.chain().focus().toggleBold().run(),
     isActive: (editor) => editor.isActive("bold"),
   },
   {
     id: "italic",
     label: "Italic",
+    shortcut: "⌘I",
     run: (editor) => editor.chain().focus().toggleItalic().run(),
     isActive: (editor) => editor.isActive("italic"),
   },
   {
     id: "strike",
     label: "Strikethrough",
+    shortcut: "⇧⌘S",
     run: (editor) => editor.chain().focus().toggleStrike().run(),
     isActive: (editor) => editor.isActive("strike"),
   },
   {
     id: "underline",
     label: "Underline",
+    shortcut: "⌘U",
     run: (editor) => editor.chain().focus().toggleUnderline().run(),
     isActive: (editor) => editor.isActive("underline"),
   },
   {
     id: "code",
     label: "Code",
+    shortcut: "⌘E",
     run: (editor) => editor.chain().focus().toggleCode().run(),
     isActive: (editor) => editor.isActive("code"),
   },
   {
     id: "blockquote",
     label: "Quote",
+    shortcut: "⇧⌘B",
     run: (editor) => liftableChain(editor).toggleBlockquote().run(),
     isActive: (editor) => editor.isActive("blockquote"),
   },
   {
     id: "code-block",
     label: "Code Block",
+    shortcut: "⌥⌘C",
     run: (editor) => editor.chain().focus().toggleCodeBlock().run(),
     isActive: (editor) => editor.isActive("codeBlock"),
   },
   {
     id: "ordered-list",
     label: "Numbered List",
+    shortcut: "⇧⌘7",
     run: (editor) => liftableChain(editor).toggleOrderedList().run(),
     isActive: (editor) => editor.isActive("orderedList"),
   },
   {
     id: "bullet-list",
     label: "Bullet List",
+    shortcut: "⇧⌘8",
     run: (editor) => liftableChain(editor).toggleBulletList().run(),
     isActive: (editor) => editor.isActive("bulletList"),
   },
   {
     id: "task-list",
     label: "Task List",
+    shortcut: "⇧⌘9",
     run: (editor) => liftableChain(editor).toggleTaskList().run(),
     isActive: (editor) => editor.isActive("taskList"),
   },

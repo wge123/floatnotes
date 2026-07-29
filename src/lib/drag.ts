@@ -20,6 +20,25 @@ export interface DragStart {
  * Where the window belongs for the current mouse position (physical px).
  * Screen deltas are logical; the window origin is physical — hence `scale`.
  */
+/**
+ * Pointer slop (logical px) below which a press-and-release on the title bar
+ * counts as a click rather than a drag. A hand never holds perfectly still,
+ * so an exact-zero test would make click-to-copy fire only by luck.
+ */
+export const CLICK_SLOP = 3;
+
+/** True when the pointer stayed within CLICK_SLOP of where it went down. */
+export function isClick(
+  start: Pick<DragStart, "screenX" | "screenY">,
+  screenX: number,
+  screenY: number,
+): boolean {
+  return (
+    Math.abs(screenX - start.screenX) <= CLICK_SLOP &&
+    Math.abs(screenY - start.screenY) <= CLICK_SLOP
+  );
+}
+
 export function nextWindowPosition(
   start: DragStart,
   screenX: number,

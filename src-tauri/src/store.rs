@@ -36,6 +36,9 @@ pub struct Note {
     pub title: String,
     pub content: String,
     pub mtime: u64,
+    /// Absolute path of the note's `.md` file. The store owns the notes dir,
+    /// so the client cannot derive this — it ships with the note.
+    pub path: String,
 }
 
 /// Pins / order / zoom / Esc behavior — app metadata only, never note content.
@@ -136,6 +139,7 @@ impl NoteStore {
             title: derive_title(&content),
             content,
             mtime: file_mtime(&path)?,
+            path: path.display().to_string(),
         })
     }
 
@@ -149,6 +153,7 @@ impl NoteStore {
             title,
             content: content.to_string(),
             mtime: file_mtime(&path)?,
+            path: path.display().to_string(),
         })
     }
 
@@ -173,6 +178,7 @@ impl NoteStore {
             title: derive_title(content),
             content: content.to_string(),
             mtime: file_mtime(&path)?,
+            path: path.display().to_string(),
         })
     }
 

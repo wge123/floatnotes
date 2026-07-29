@@ -8,6 +8,7 @@ const note = (over: Partial<Note> = {}): Note => ({
   title: "Hello",
   content: "# Hello",
   mtime: 1000,
+  path: "/tmp/notes/hello-abc123.md",
   ...over,
 });
 

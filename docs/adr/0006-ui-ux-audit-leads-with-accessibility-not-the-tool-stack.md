@@ -49,3 +49,22 @@ need on an app this size.
   88-line stylesheet is information.
 - If the a11y pass finds little, the audit still has the tool stack's output to fall
   back on, so this choice does not create a single point of failure.
+
+### Correction (walkthrough, same day)
+
+This ADR's Context claimed the tool stack probes `keyboard reachability` barely at all.
+That was half wrong, and reading `design-audit.mjs` corrected it: the script checks
+`focus-visible` at **high** severity (line 93), plus `accessible-name` (102) and
+`tap-target` (79). Focus *visibility* is therefore measured directly, and findings about
+it are `measured`, not `model-judged`.
+
+What the stack still does not measure, and what the a11y-led axis genuinely adds:
+dialog semantics (`role`, `aria-modal`), focus traps, focus restoration on overlay close,
+and tab order. The decision stands on that narrower basis.
+
+Two related properties of the script, both relevant when reading its output:
+- Contrast is emitted at **medium** severity (line 131), so contrast findings never
+  trigger the `exit 2` gate — the exit code under-reports exactly the class ADR 0011
+  makes deterministic. Read the report body, not just the exit code.
+- Its `headings` check flags "No `<h1>` on the page" at medium. The note body is user
+  content, so this is a guaranteed false positive here and should be pre-briefed.

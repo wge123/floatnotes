@@ -18,9 +18,9 @@
       "docs/adr/0011-contrast-is-a-deterministic-verdict-despite-the-transparent-window.md",
       "docs/glossary.md"
     ], "note": "Five questions asked; plan amended in place. ADR 0011 was a factual correction applied without a grill question (it rests on directly verified source: the app root is opaque bg-white), not a judgment call put to the user."},
-    "walkthrough":   {"status": "in-progress", "artifact": null},
-    "linearize":     {"status": "pending",     "parentTodo": null},
-    "sweep":         {"status": "pending",     "runId": null, "remaining": []},
+    "walkthrough":   {"status": "done", "artifact": ".plans/ui-ux-audit.runsheet.md", "note": "14 units, 12 agent-ready, 2 agent-ready:no (physical — quit/restore the user's running app). Surfaced that ADR 0009 was unworkable (bare playwright import) and corrected the Stage 1 brief's claim about focus-visible coverage; both folded back into the ADRs."},
+    "linearize":     {"status": "skipped", "parentTodo": null, "reason": "User decision D2 at the walkthrough: the audit is strictly sequential with zero parallel steps, runs ~2.5h, and ends in a human-read verdict — decomposing it into a todo chain is pure orchestration overhead. The runsheet is the checklist instead."},
+    "sweep":         {"status": "skipped", "runId": null, "remaining": [], "reason": "Same decision (D2) — direct sequential execution rather than an autonomous sweep. Two runsheet units are agent-ready:no (physical) anyway, so a sweep would have parked on them."},
     "code-review":   {"status": "pending",     "ultraOffered": false, "landed": false}
   },
   "notes": [

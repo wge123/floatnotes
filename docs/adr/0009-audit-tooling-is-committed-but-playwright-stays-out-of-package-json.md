@@ -1,7 +1,13 @@
 # ADR 0009: Audit tooling is committed; Playwright stays out of package.json
 
-- Status: Accepted
+- Status: Superseded by ADR-0012
 - Date: 2026-07-30
+
+> Superseded the same day, during the apex walkthrough. This ADR assumed documenting an
+> out-of-tree Playwright install was enough to make a committed `scripts/design-audit.mjs`
+> runnable. It is not: the script imports `playwright` as a bare specifier, so Node's
+> module resolution — not browser discovery — is the blocker. See ADR 0012 for the
+> replacement. The intent this ADR established, keeping `package.json` lean, survives.
 
 ## Context
 

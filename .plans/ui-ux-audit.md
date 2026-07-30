@@ -17,11 +17,16 @@ All decisions are settled. Each links the ADR carrying its full rationale and co
 | 1 | **Primary axis is accessibility**, not the tool stack. Keyboard reachability, focus visibility, and dialog semantics lead; the stack confirms and backstops aesthetics. | [0006](../docs/adr/0006-ui-ux-audit-leads-with-accessibility-not-the-tool-stack.md) |
 | 2 | **Tooling scope: hallmark alone.** No strix. Phase 5b becomes a targeted Playwright CORS probe — the underlying finding is already established from source. | [0007](../docs/adr/0007-security-side-pass-is-a-cors-probe-not-an-ai-pentester.md) |
 | 3 | **Audit a dev build**, behind an explicit build-mode gate. Quit the running release instance first. | [0008](../docs/adr/0008-audit-targets-a-dev-build-with-an-explicit-build-mode-gate.md) |
-| 4 | **Commit posture:** tooling + report land on `chore/ui-ux-audit`; Playwright stays **out of** `package.json`, installed out-of-tree. | [0009](../docs/adr/0009-audit-tooling-is-committed-but-playwright-stays-out-of-package-json.md) |
+| 4 | **Commit posture:** the script lives out-of-repo in `~/.local/share/floatnotes-audit/` with its own Playwright; the repo commits the report plus a non-runnable reference copy. `package.json` untouched. | [0012](../docs/adr/0012-audit-script-lives-outside-the-repo-only-output-is-committed.md) *(supersedes [0009](../docs/adr/0009-audit-tooling-is-committed-but-playwright-stays-out-of-package-json.md))* |
 | 5 | **Output home:** standalone `audit-output/REPORT.md`; only the durable manual-verification checklist merges into `docs/ux-testing.md` Level 3. | [0010](../docs/adr/0010-audit-report-is-standalone-manual-steps-feed-back-into-ux-testing.md) |
 | 6 | **Contrast is deterministic.** The app root is opaque `bg-white`; the wallpaper reaches only the corner arcs. Controlled-backdrop workaround dropped. | [0011](../docs/adr/0011-contrast-is-a-deterministic-verdict-despite-the-transparent-window.md) |
 
 Branch is `chore/ui-ux-audit` (supersedes the plan-time `chore/ui-ux-audit-tooling`).
+
+**▶ Execute from the runsheet, not from this document:
+[`ui-ux-audit.runsheet.md`](./ui-ux-audit.runsheet.md)** — 14 numbered units with explicit
+preconditions and acceptance checks, including two `agent-ready: no (physical)` steps this plan
+never had (quit the running app; restore it afterwards). This document remains the rationale.
 
 **Pre-loaded leads.** `.apex/2026-07-30-ui-ux-audit/01-understanding.md` §3 lists nine findings
 already visible from source before any tool runs — a default scaffold `<title>`, absent focus

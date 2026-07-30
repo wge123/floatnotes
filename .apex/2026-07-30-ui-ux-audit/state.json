@@ -1,0 +1,24 @@
+{
+  "objective": "Run a UI/UX quality audit and design review on FloatNotes (ui-ux-pro-max audit stack + hallmark), producing ranked evidence-backed findings and a ship/no-ship verdict. Apply no fixes.",
+  "slug": "ui-ux-audit",
+  "created": "2026-07-30",
+  "branch": "chore/ui-ux-audit",
+  "secondBrainProject": "area: FloatNotes",
+  "sourcePlan": ".plans/ui-ux-audit.md",
+  "stages": {
+    "deepthink":     {"status": "done",    "artifact": ".apex/2026-07-30-ui-ux-audit/01-understanding.md"},
+    "deep-research": {"status": "skipped", "reason": "Tool selection was already litigated in the source plan's shortlist table. Every open question Stage 1 surfaced resolved against local source (axum cfg(debug_assertions) proxy, the four Tauri guards, the opaque bg-white root, the ACAO:* middleware) — no external evidence needed. The one genuinely external unknown, Chrome's Private Network Access behavior on loopback, is settled empirically by the audit's own Playwright probe rather than by reading the web."},
+    "blueprint":     {"status": "done",    "artifact": ".plans/ui-ux-audit.md", "note": "Adopted the user-supplied approved plan as the blueprint rather than generating a new one; Stage 1 proposes five amendments for the grill to ratify."},
+    "grill":         {"status": "in-progress", "artifacts": []},
+    "walkthrough":   {"status": "pending",     "artifact": null},
+    "linearize":     {"status": "pending",     "parentTodo": null},
+    "sweep":         {"status": "pending",     "runId": null, "remaining": []},
+    "code-review":   {"status": "pending",     "ultraOffered": false, "landed": false}
+  },
+  "notes": [
+    "Invoked as /apex with an existing approved plan (.plans/ui-ux-audit.md) rather than a bare objective — Stage 3 adopts that plan as the blueprint instead of generating a new one.",
+    "Integration branch is chore/ui-ux-audit (not feat/) — the work is tooling + a report, not a feature. Supersedes the plan's proposed chore/ui-ux-audit-tooling.",
+    "Branch cut with CLAUDE_TREE_OVERRIDE=1 at the user's explicit direction; the branch guard reported another live session owning this checkout."
+  ],
+  "failures": []
+}

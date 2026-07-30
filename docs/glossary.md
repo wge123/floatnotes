@@ -1,5 +1,27 @@
 # Glossary
 
+### Build-mode gate
+
+The assertion that `http://localhost:4949/harness.html` resolves, used as proof
+that 4949 is being served by a **debug** build. The server picks its fallback
+handler at compile time — debug proxies to Vite, release serves `dist/` from
+disk — and the URL alone reveals neither, so this check is a hard precondition
+before any audit measurement. See ADR 0008.
+
+### Evidence tagging
+
+The rule that every audit finding carries its source: `measured` (a value a
+deterministic tool produced — a computed contrast ratio, a rendered width, a
+missing DOM attribute) or `model-judged` (a reviewer's opinion). Model-judged
+findings never gate a verdict on their own. See ADR 0006.
+
+### Keyboard reachability
+
+Whether every interactive control can be reached, operated, and left using only
+the keyboard, with the focused element visibly indicated at all times. Covers
+tab order, focus visibility, focus traps in overlays, and focus restoration when
+an overlay closes. The primary axis of the 2026-07 UI/UX audit. See ADR 0006.
+
 ### Marker consumption
 
 The v1 editing model: typing a markdown trigger (`# `, `**bold**`, `- `)
@@ -13,6 +35,15 @@ One plain UTF-8 `.md` file in `~/Notes` (override `FLOATNOTES_DIR`). The file
 IS the note — no frontmatter, no database row. Title = first non-empty line
 (leading `#` stripped); filename = title slug + short random suffix, stable
 after creation.
+
+### Private Network Access
+
+The browser gate on requests from a public page to a private/loopback address.
+Chrome preflights such requests and expects
+`Access-Control-Allow-Private-Network: true`, which the FloatNotes server never
+sends — so it plausibly blocks an `https://` page from reading `:4949` while
+leaving `http://` and `file://` origins unblocked. Whether it does in practice
+is what the audit's CORS probe measures. See ADR 0007.
 
 ### Sidecar
 

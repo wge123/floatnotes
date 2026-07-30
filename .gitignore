@@ -26,3 +26,13 @@ dist-ssr
 # Rust build artifacts
 src-tauri/target
 src-tauri/gen/schemas
+
+# Vendored agent skills (one-off audit tooling — reinstall with
+# `npx skills add nutlope/hallmark`). Same reasoning as ADR 0012: a lean repo
+# doesn't carry 67k of third-party tooling that one command restores.
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Scratch driver output
+.playwright-cli/

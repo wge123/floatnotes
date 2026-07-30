@@ -759,9 +759,18 @@ function App() {
           onClose={() => closeOverlay("find")}
         />
       )}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-200 px-2 py-1">
+      {/*
+        `flex-wrap` is load-bearing: the app root is `overflow-hidden`, so a bar
+        that overflows loses controls silently (no scrollbar, no affordance).
+        Wrapping trades height — which the window has — for width it doesn't.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-gray-200 px-2 py-1">
         {editorInstance ? <FormatBar editor={editorInstance} /> : <span />}
-        <StatusBar markdown={note?.content ?? ""} />
+        {/* `ml-auto` keeps the count on the right edge on its own wrapped row,
+            where `justify-between` would otherwise flush it left. */}
+        <div className="ml-auto">
+          <StatusBar markdown={note?.content ?? ""} />
+        </div>
       </div>
       {overlays.includes("switcher") && (
         <NoteSwitcher

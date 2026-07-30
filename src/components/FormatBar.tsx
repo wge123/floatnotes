@@ -108,7 +108,12 @@ export default function FormatBar({ editor }: FormatBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-0.5">
+    // `shrink-0 max-w-full`: hold the glyph row at its natural width (~316px,
+    // which is what sets the window's 360px minWidth) so the word count is
+    // what wraps first, but never exceed the bar — then `flex-wrap` folds the
+    // glyphs themselves under text zoom rather than letting the
+    // overflow-hidden app root clip them away.
+    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-0.5">
       <div ref={popoverRef} className="relative">
         <FormatButton
           label="Heading"

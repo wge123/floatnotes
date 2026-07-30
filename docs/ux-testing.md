@@ -51,8 +51,14 @@ mutating the live inbox for read-mostly checks.
    walk history; deleted notes purge from history.
 8. **Delete + undo** — delete swaps to most-recent survivor, toast Undo
    restores the SAME file id (entity identity, not a re-create).
-9. **Live sync (two tabs)** — open :4949 twice; edits in one appear in the
+9. **Live sync (two tabs)** — open the app twice; edits in one appear in the
    other (clean), deletes toast "deleted elsewhere"; own-echo never toasts.
+   ⚠️ **Use `:1420`, not `:4949`, against a dev build.** Vite's HMR client
+   cannot hold its socket through the axum proxy, so a page at `:4949` reloads
+   ~40×/sec and never mounts (measured 2026-07-30 — `audit-output/REPORT.md`
+   Appendix C1). `:1420` serves the identical app and `api.ts:66-70` routes its
+   API calls back to 4949, so persistence and live sync are still exercised.
+   Release builds serve `dist/` statically and are unaffected.
 10. **Zoom** — ⌘+/⌘-/⌘0 scale and persist; reload keeps zoom.
 11. **Click-anywhere** — clicking empty space below content focuses the editor
     with caret at end (regression: fill-height fix).
@@ -71,6 +77,21 @@ the FloatNotes project.
 - "Hide from Screen Share" makes the panel invisible in a screen recording
 - Launch at login (SMAppService) after enabling + reboot
 - cmux: ⌘⌥N action, `note` CLI capture while app closed → lands in inbox
+
+Added by the 2026-07-30 UI/UX audit — surfaces a browser can never reach
+(`audit-output/REPORT.md` Appendix A):
+
+- **Corner arcs over light AND dark wallpaper.** The app root is opaque
+  `bg-white`, so the four `rounded-xl` corners are the *only* pixels where the
+  wallpaper composites. Everything else is checkable in a browser; this isn't.
+- **Window resize floor.** Drag the panel narrower than ~381px: the bottom bar
+  silently loses the task-list button and the word count, with no scrollbar
+  (the root is `overflow-hidden`). No `minWidth` is set in `tauri.conf.json`.
+- **Focus restoration after Esc**, in the real panel: open ⌘P, press Esc, then
+  type. The keystrokes should land in the note. In the browser surface focus is
+  lost to `<body>` entirely — confirm whether the panel behaves the same.
+- **⌥N while an overlay is open** — the global shortcut and the overlay stack's
+  Esc layering are owned by different layers; only the native panel exercises both.
 
 ## Cadence
 

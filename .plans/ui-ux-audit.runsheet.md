@@ -36,7 +36,7 @@
 - **files**: none (runtime state)
 - **pre**: S01-S03; the installed FloatNotes app is running and holding port 4949
 - **do**: quit the running FloatNotes instance; confirm the port is free with `lsof -nP -iTCP:4949 -sTCP:LISTEN` (expect no output); start `bun run tauri dev` in the background; wait for `[floatnotes] serving on http://127.0.0.1:4949` on stdout
-- **accept**: `curl -sf -o /dev/null -w '%{http_code}' http://localhost:4949/harness.html` returns `200`. A release build cannot pass this — `vite build` bundles `index.html` only. **Nothing downstream runs until this returns 200.**
+- **accept**: `curl -s http://localhost:4949/harness.html | grep -q 'dev-harness.tsx'`. **A status-code check is NOT sufficient** — `serve_dist` (`server.rs:143`) falls back to `index.html` for unknown routes, so a release build returns `200` for `/harness.html` too. Only the body distinguishes them: the harness references `/src/dev-harness.tsx`, `index.html` references `/src/main.tsx`. Corroborate with `lsof -nP -iTCP:1420 -sTCP:LISTEN` (Vite must be listening) and the `@vite/client` script tag in the response. **Nothing downstream runs until the body check passes.**
 - **depends**: [S01, S02, S03]   **parallel-group**: serial   **size**: S
 - **agent-ready**: no — physical (quitting the user's running app is a real-world action on their machine; ADR 0008)
 

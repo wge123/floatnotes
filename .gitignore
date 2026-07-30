@@ -36,3 +36,6 @@ skills-lock.json
 
 # Scratch driver output
 .playwright-cli/
+
+# cmux cockpit local scratch (also matched by *.log above; explicit for clarity)
+.cmux/edits.log

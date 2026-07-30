@@ -164,30 +164,73 @@ async fn serve_dist(uri: Uri) -> Response {
     }
 }
 
+/// Vite's port, `FLOATNOTES_VITE_PORT` override (fail-loud, like
+/// `FLOATNOTES_PORT`). The override exists so the proxy can be pointed at a
+/// stub upstream in tests without fighting a real `bun run dev` for 1420.
 #[cfg(debug_assertions)]
-async fn proxy_to_vite(req: Request<Body>) -> Response {
-    use hyper_util::client::legacy::Client;
-    use hyper_util::rt::TokioExecutor;
+fn vite_dev_port() -> u16 {
+    match std::env::var("FLOATNOTES_VITE_PORT") {
+        Ok(raw) => raw
+            .parse()
+            .unwrap_or_else(|e| panic!("invalid FLOATNOTES_VITE_PORT {raw:?}: {e}")),
+        Err(_) => VITE_DEV_PORT,
+    }
+}
 
+#[cfg(debug_assertions)]
+async fn proxy_to_vite(mut req: Request<Body>) -> Response {
+    use hyper_util::client::legacy::Client;
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+
+    let port = vite_dev_port();
     let path_and_query = req
         .uri()
         .path_and_query()
         .map(|pq| pq.as_str())
         .unwrap_or("/");
-    let uri: Uri = match format!("http://127.0.0.1:{VITE_DEV_PORT}{path_and_query}").parse() {
+    let uri: Uri = match format!("http://127.0.0.1:{port}{path_and_query}").parse() {
         Ok(uri) => uri,
         Err(e) => {
             return (StatusCode::BAD_REQUEST, format!("bad proxy uri: {e}")).into_response()
         }
     };
+
+    // Claim the downstream half of a potential protocol upgrade BEFORE the
+    // request is consumed. Forwarding the 101 alone is not enough: without
+    // splicing the two upgraded sockets the Vite HMR WebSocket connects, goes
+    // silent, and its client reload-loops on "server connection lost"
+    // (~40 reloads/s, app never mounts). Cheap when there is no upgrade —
+    // the future simply never resolves and is dropped with the response.
+    let downstream_upgrade = hyper::upgrade::on(&mut req);
+
     let (mut parts, body) = req.into_parts();
     parts.uri = uri;
     let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build_http();
     match client.request(Request::from_parts(parts, body)).await {
+        Ok(mut upstream) if upstream.status() == StatusCode::SWITCHING_PROTOCOLS => {
+            let upstream_upgrade = hyper::upgrade::on(&mut upstream);
+            tokio::spawn(async move {
+                // `downstream_upgrade` only resolves once axum has written the
+                // 101 back, so this has to run off the response path.
+                match tokio::try_join!(downstream_upgrade, upstream_upgrade) {
+                    Ok((down, up)) => {
+                        let (mut down, mut up) = (TokioIo::new(down), TokioIo::new(up));
+                        if let Err(e) = tokio::io::copy_bidirectional(&mut down, &mut up).await {
+                            eprintln!("[proxy] upgraded stream ended: {e}");
+                        }
+                    }
+                    Err(e) => eprintln!("[proxy] upgrade handoff failed: {e}"),
+                }
+            });
+            // Drop the upstream body: after a 101 the bytes belong to the
+            // spliced stream, not to this response.
+            let (parts, _) = upstream.into_parts();
+            Response::from_parts(parts, Body::empty())
+        }
         Ok(resp) => resp.map(Body::new).into_response(),
         Err(e) => (
             StatusCode::BAD_GATEWAY,
-            format!("vite dev proxy ({VITE_DEV_PORT}): {e}"),
+            format!("vite dev proxy ({port}): {e}"),
         )
             .into_response(),
     }

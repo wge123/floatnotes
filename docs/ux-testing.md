@@ -53,12 +53,14 @@ mutating the live inbox for read-mostly checks.
    restores the SAME file id (entity identity, not a re-create).
 9. **Live sync (two tabs)** — open the app twice; edits in one appear in the
    other (clean), deletes toast "deleted elsewhere"; own-echo never toasts.
-   ⚠️ **Use `:1420`, not `:4949`, against a dev build.** Vite's HMR client
-   cannot hold its socket through the axum proxy, so a page at `:4949` reloads
-   ~40×/sec and never mounts (measured 2026-07-30 — `audit-output/REPORT.md`
-   Appendix C1). `:1420` serves the identical app and `api.ts:66-70` routes its
-   API calls back to 4949, so persistence and live sync are still exercised.
-   Release builds serve `dist/` statically and are unaffected.
+   `:4949` is the surface for both dev and release builds. (Historical note:
+   until 2026-07-30 the dev proxy forwarded Vite's `101` without splicing the
+   upgraded sockets, so the HMR client looped on "server connection lost" and
+   a page at `:4949` reloaded ~40×/sec and never mounted —
+   `audit-output/REPORT.md` Appendix C1. `proxy_to_vite` now bridges the
+   upgrade; `server::tests::dev_proxy_bridges_the_upgraded_websocket_stream`
+   guards it. If that regression ever returns, `:1420` is the fallback: it
+   serves the identical app and `api.ts` routes its API calls back to 4949.)
 10. **Zoom** — ⌘+/⌘-/⌘0 scale and persist; reload keeps zoom.
 11. **Click-anywhere** — clicking empty space below content focuses the editor
     with caret at end (regression: fill-height fix).

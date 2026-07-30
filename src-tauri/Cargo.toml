@@ -24,11 +24,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync", "fs", "io-util"] }
 notify = "8"
 # Dev proxy to Vite (release serves the tauri-embedded dist/ instead — there is
 # no dist/ on disk inside the .app bundle, so no tower-http ServeDir).
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+# `hyper::upgrade::on` — the dev proxy has to splice both halves of a 101 by
+# hand (axum re-exports no equivalent). Already in the tree under axum.
+hyper = "1"
 # Git deps pinned by rev for reproducible builds (the study clone's unpinned
 # branch refs are one of its documented mistakes).
 tauri-plugin-global-shortcut = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "1a0b7916501fd493dfe62bf227a8604eb8d05938" }

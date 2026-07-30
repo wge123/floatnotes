@@ -9,8 +9,16 @@
     "deepthink":     {"status": "done",    "artifact": ".apex/2026-07-30-ui-ux-audit/01-understanding.md"},
     "deep-research": {"status": "skipped", "reason": "Tool selection was already litigated in the source plan's shortlist table. Every open question Stage 1 surfaced resolved against local source (axum cfg(debug_assertions) proxy, the four Tauri guards, the opaque bg-white root, the ACAO:* middleware) — no external evidence needed. The one genuinely external unknown, Chrome's Private Network Access behavior on loopback, is settled empirically by the audit's own Playwright probe rather than by reading the web."},
     "blueprint":     {"status": "done",    "artifact": ".plans/ui-ux-audit.md", "note": "Adopted the user-supplied approved plan as the blueprint rather than generating a new one; Stage 1 proposes five amendments for the grill to ratify."},
-    "grill":         {"status": "in-progress", "artifacts": []},
-    "walkthrough":   {"status": "pending",     "artifact": null},
+    "grill":         {"status": "done", "artifacts": [
+      "docs/adr/0006-ui-ux-audit-leads-with-accessibility-not-the-tool-stack.md",
+      "docs/adr/0007-security-side-pass-is-a-cors-probe-not-an-ai-pentester.md",
+      "docs/adr/0008-audit-targets-a-dev-build-with-an-explicit-build-mode-gate.md",
+      "docs/adr/0009-audit-tooling-is-committed-but-playwright-stays-out-of-package-json.md",
+      "docs/adr/0010-audit-report-is-standalone-manual-steps-feed-back-into-ux-testing.md",
+      "docs/adr/0011-contrast-is-a-deterministic-verdict-despite-the-transparent-window.md",
+      "docs/glossary.md"
+    ], "note": "Five questions asked; plan amended in place. ADR 0011 was a factual correction applied without a grill question (it rests on directly verified source: the app root is opaque bg-white), not a judgment call put to the user."},
+    "walkthrough":   {"status": "in-progress", "artifact": null},
     "linearize":     {"status": "pending",     "parentTodo": null},
     "sweep":         {"status": "pending",     "runId": null, "remaining": []},
     "code-review":   {"status": "pending",     "ultraOffered": false, "landed": false}

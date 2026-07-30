@@ -23,6 +23,11 @@ import {
 } from "./lib/app-keymap";
 import { saveWithConflictReload } from "./lib/autosave";
 import { toHtml, toPlainText } from "./lib/export";
+import {
+  captureFocus,
+  focusEditorSurface,
+  type FocusRestore,
+} from "./lib/focus-restore";
 import { applyZoom, clampZoom, ZOOM_DEFAULT, zoomIn, zoomOut } from "./lib/zoom";
 import { connectSync, decideSyncAction } from "./lib/ws";
 import {
@@ -91,6 +96,8 @@ function App() {
   const [screenShareVisible, setScreenShareVisible] = useState(true);
   const [loginItem, setLoginItem] = useState(false);
   const editorRef = useRef<TiptapEditor | null>(null);
+  /** The div Editor mounts into — the overlay focus fallback aims here. */
+  const editorHostRef = useRef<HTMLDivElement>(null);
   // Also in state: FormatBar mounts with the editor, and a ref set during
   // Editor's onCreate would never trigger the render that shows the bar.
   const [editorInstance, setEditorInstance] = useState<TiptapEditor | null>(
@@ -133,19 +140,54 @@ function App() {
   // The pure stack in app-keymap owns Esc layering; React state only mirrors
   // which overlays are visible.
   const overlayStack = useRef<readonly OverlayEntry[]>([]);
+  /** Where focus was when each overlay opened (a11y H1) — replayed on close. */
+  const focusRestores = useRef(new Map<OverlayId, FocusRestore>());
 
-  const closeOverlay = useCallback((id: OverlayId) => {
-    overlayStack.current = removeOverlay(overlayStack.current, id);
+  /**
+   * Take an overlay off screen and hand the keyboard back. The stack entry is
+   * removed by the caller (Esc goes through closeTopOverlay, which pops first).
+   */
+  const hideOverlay = useCallback((id: OverlayId) => {
     setOverlays((open) => open.filter((o) => o !== id));
+    const restore = focusRestores.current.get(id);
+    focusRestores.current.delete(id);
+    if (!restore) return;
+    // A frame later, not now: closing can remount the very thing focus belongs
+    // to (⌘P picking a different note remounts Editor under a new key), and
+    // focusing a node React is about to throw away lands us back on BODY.
+    requestAnimationFrame(() => {
+      // Closing can also chain straight into another overlay (⌘K → "Browse
+      // Notes"): that one focused its own input and owns the restore now.
+      if (overlayStack.current.length === 0) restore();
+    });
   }, []);
 
-  const openOverlay = useCallback((id: OverlayId) => {
-    overlayStack.current = pushOverlay(overlayStack.current, {
-      id,
-      close: () => setOverlays((open) => open.filter((o) => o !== id)),
-    });
-    setOverlays((open) => (open.includes(id) ? open : [...open, id]));
-  }, []);
+  const closeOverlay = useCallback(
+    (id: OverlayId) => {
+      overlayStack.current = removeOverlay(overlayStack.current, id);
+      hideOverlay(id);
+    },
+    [hideOverlay],
+  );
+
+  const openOverlay = useCallback(
+    (id: OverlayId) => {
+      // Guarded: re-opening an already-open overlay (⌘F while Find is up) must
+      // not overwrite the capture with the overlay's own input.
+      if (!focusRestores.current.has(id)) {
+        focusRestores.current.set(
+          id,
+          captureFocus(() => focusEditorSurface(editorHostRef.current)),
+        );
+      }
+      overlayStack.current = pushOverlay(overlayStack.current, {
+        id,
+        close: () => hideOverlay(id),
+      });
+      setOverlays((open) => (open.includes(id) ? open : [...open, id]));
+    },
+    [hideOverlay],
+  );
 
   const toggleOverlay = useCallback(
     (id: OverlayId) => {
@@ -694,7 +736,10 @@ function App() {
           {banner}
         </div>
       )}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
+      <div
+        ref={editorHostRef}
+        className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3"
+      >
         {note && (
           <Editor
             key={note.id}
@@ -743,7 +788,7 @@ function App() {
             <button
               type="button"
               onClick={undoDelete.undo}
-              className="font-semibold text-blue-300 hover:text-blue-200"
+              className="font-semibold text-blue-300 hover:text-blue-200 focus-visible:text-blue-200"
             >
               Undo
             </button>

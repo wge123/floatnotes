@@ -61,7 +61,7 @@ function FormatButton({
         className={`flex h-6 min-w-6 items-center justify-center rounded border-none px-1 font-mono text-xs shadow-none ${
           active
             ? "bg-gray-200 text-gray-900"
-            : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+            : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:bg-gray-100 focus-visible:text-gray-800"
         }`}
       >
         {children}

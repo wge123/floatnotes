@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, type Note } from "../lib/api";
+import { trapTab } from "../lib/focus-trap";
 import { rankNotes } from "../lib/fuzzy";
 
 export interface NoteSwitcherProps {
@@ -78,12 +79,22 @@ export default function NoteSwitcher({
 
   return (
     <div
-      className="absolute inset-0 z-40 flex items-start justify-center bg-black/20 pt-10"
+      className="absolute inset-0 z-40 flex items-start justify-center bg-black/20 px-3 pt-10"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[70%] w-[420px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Note switcher"
+        onKeyDown={trapTab}
+        // w-full + max-w, not w-[420px] (audit N2): at the shipped 420px window
+        // a fixed 420px card is exactly full-bleed, so its rounded-xl corners
+        // are clipped away and it reads as a sheet, not a floating modal. The
+        // scrim's px-3 now guarantees a visible gutter at every window width.
+        className="flex max-h-[70%] w-full max-w-[420px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+      >
         <input
           ref={inputRef}
           value={query}
@@ -93,15 +104,17 @@ export default function NoteSwitcher({
           }}
           onKeyDown={onKeyDown}
           placeholder="Search notes…"
-          className="border-b border-gray-200 px-4 py-3 text-sm outline-none"
+          // floatnotes-focus-inset: inset focus ring (App.css) — an outset one
+          // is clipped by the overlay's rounded, overflow-hidden corner.
+          className="floatnotes-focus-inset border-b border-gray-200 px-4 py-3 text-sm"
         />
         <ul className="min-h-0 flex-1 overflow-auto py-1">
           {error && <li className="px-4 py-2 text-xs text-red-600">{error}</li>}
           {!error && notes === null && (
-            <li className="px-4 py-2 text-xs text-gray-400">loading…</li>
+            <li className="px-4 py-2 text-xs text-gray-500">loading…</li>
           )}
           {!error && notes !== null && ranked.length === 0 && (
-            <li className="px-4 py-2 text-xs text-gray-400">no matches</li>
+            <li className="px-4 py-2 text-xs text-gray-500">no matches</li>
           )}
           {ranked.map(({ note, pinned }, index) => (
             <li key={note.id}>
@@ -116,13 +129,23 @@ export default function NoteSwitcher({
                 {pinned && <span aria-label="pinned">📌</span>}
                 <span className="truncate">{note.title}</span>
                 {note.id === currentNoteId && (
-                  <span className="ml-auto text-xs text-gray-400">current</span>
+                  <span
+                    // gray-600, not gray-500: rides the row, and the selected
+                    // row is bg-blue-50, where gray-500 is only 4.44:1.
+                    className="ml-auto text-xs text-gray-600"
+                  >
+                    current
+                  </span>
                 )}
               </button>
             </li>
           ))}
         </ul>
-        <div className="border-t border-gray-100 px-4 py-1.5 text-[10px] text-gray-400">
+        <div
+          // gray-600 to match the other 10px hint: gray-500 clears AA on white
+          // (4.84:1) but only just, and this is the smallest text in the app.
+          className="border-t border-gray-100 px-4 py-1.5 text-[10px] text-gray-600"
+        >
           ↑↓ select · Enter open · fn⌫ delete · Esc close
         </div>
       </div>

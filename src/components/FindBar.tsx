@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import type { SearchAndReplaceStorage } from "@sereneinserenade/tiptap-search-and-replace";
 
+import { trapTab } from "../lib/focus-trap";
+
 export interface FindBarProps {
   editor: TiptapEditor;
   onClose: () => void;
@@ -58,7 +60,18 @@ export default function FindBar({ editor, onClose }: FindBarProps) {
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-t border-gray-200 bg-gray-50 px-3 py-1.5">
+    <div
+      role="dialog"
+      // Deliberately NOT modal: the find bar sits inline under the editor and
+      // the editor stays live behind it (matches highlight as you type), so
+      // claiming aria-modal="true" would lie to a screen reader.
+      aria-modal="false"
+      aria-label="Find in note"
+      // Non-modal, but Tab still cycles inside the bar (a11y H3): the editor
+      // behind it is reachable by click and by Esc, not by tabbing past it.
+      onKeyDown={trapTab}
+      className="flex shrink-0 items-center gap-2 border-t border-gray-200 bg-gray-50 px-3 py-1.5"
+    >
       <span className="text-xs font-medium text-gray-500">Find</span>
       <input
         ref={inputRef}
@@ -70,16 +83,18 @@ export default function FindBar({ editor, onClose }: FindBarProps) {
             step(e.shiftKey ? "previous" : "next");
           }
         }}
-        className="flex-1 bg-transparent text-sm outline-none"
+        // floatnotes-focus-inset: inset focus ring (App.css), matching the
+        // other two overlay search fields.
+        className="floatnotes-focus-inset flex-1 bg-transparent text-sm"
       />
-      <span className="font-mono text-xs text-gray-400">
+      <span className="font-mono text-xs text-gray-500">
         {counts.current}/{counts.total}
       </span>
       <button
         type="button"
         onClick={() => step("previous")}
         disabled={counts.total === 0}
-        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200 disabled:opacity-40"
+        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200 focus-visible:bg-gray-200 disabled:opacity-40"
         aria-label="Previous match"
       >
         ↑
@@ -88,7 +103,7 @@ export default function FindBar({ editor, onClose }: FindBarProps) {
         type="button"
         onClick={() => step("next")}
         disabled={counts.total === 0}
-        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200 disabled:opacity-40"
+        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200 focus-visible:bg-gray-200 disabled:opacity-40"
         aria-label="Next match"
       >
         ↓
@@ -96,7 +111,7 @@ export default function FindBar({ editor, onClose }: FindBarProps) {
       <button
         type="button"
         onClick={onClose}
-        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200"
+        className="rounded px-1.5 text-xs text-gray-500 hover:bg-gray-200 focus-visible:bg-gray-200"
         aria-label="Close find"
       >
         ✕

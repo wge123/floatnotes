@@ -37,5 +37,9 @@ skills-lock.json
 # Scratch driver output
 .playwright-cli/
 
+# Agent worktrees + local session settings — machine-local, never shared
+.claude/worktrees/
+.claude/settings.json
+
 # cmux cockpit local scratch (also matched by *.log above; explicit for clarity)
 .cmux/edits.log

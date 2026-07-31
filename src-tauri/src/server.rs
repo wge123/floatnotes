@@ -5,6 +5,7 @@
 //! logged to stdout: that log line is the primary verification signal.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
@@ -65,6 +66,7 @@ struct AppState {
 
 pub fn router(store: NoteStore, tx: broadcast::Sender<Event>) -> Router {
     let state = AppState { store, tx };
+    let origins = Arc::new(allowed_origins());
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/notes", get(list_notes).post(create_note))
@@ -76,29 +78,80 @@ pub fn router(store: NoteStore, tx: broadcast::Sender<Event>) -> Router {
         .route("/api/sidecar", get(read_sidecar).put(write_sidecar))
         .route("/ws", get(ws_upgrade))
         .with_state(state)
-        .layer(middleware::from_fn(cors));
+        .layer(middleware::from_fn_with_state(origins, cors));
     add_frontend(router)
 }
 
-/// Permissive CORS: the Tauri webview's page origin (Vite `127.0.0.1:1420`
-/// in dev, `tauri://localhost` in release) differs from this server's, so
-/// its `fetch` calls are cross-origin. The server binds loopback only, so
-/// `*` exposes nothing beyond what any local process can already reach.
-async fn cors(req: Request<Body>, next: Next) -> Response {
+/// The only origins whose browser `fetch` may touch this API.
+///
+/// This list used to be `*`, on the reasoning that a loopback-only bind
+/// "exposes nothing beyond what any local process can already reach". That
+/// reasoning is wrong, and the 2026-07-30 audit measured it: a *web page* is
+/// not a local process, and it borrows the user's browser to reach loopback.
+/// Chromium happens to block this via Private Network Access, but WebKit 26.5
+/// and Firefox 153 do not — both read the entire notes corpus cross-origin and
+/// accepted `POST 201` / `DELETE 204`. Safari is the macOS default browser.
+/// See `audit-output/security/cors-non-chromium.md`.
+fn allowed_origins() -> Vec<String> {
+    // serve() validates FLOATNOTES_PORT and fails loudly before any request is
+    // handled, so an unparseable value can never reach this point in the app;
+    // in tests the var is unset. DEFAULT_PORT is the honest value either way.
+    let port = configured_port().unwrap_or(DEFAULT_PORT);
+    vec![
+        // Release: the Tauri webview serves the bundled dist over its own
+        // protocol, so its fetches to this server are cross-origin.
+        "tauri://localhost".to_string(),
+        // Dev: the page is Vite's; `api.ts` points it back here.
+        format!("http://localhost:{VITE_DEV_PORT}"),
+        format!("http://127.0.0.1:{VITE_DEV_PORT}"),
+        // Our own origin. Same-origin GETs send no Origin header, but
+        // same-origin POST/PUT/DELETE do — and docs/ux-testing.md's whole L2
+        // layer drives the app as a plain page here.
+        format!("http://localhost:{port}"),
+        format!("http://127.0.0.1:{port}"),
+    ]
+}
+
+/// Gate every request on `Origin`, then echo back only what we allow.
+async fn cors(
+    State(allowed): State<Arc<Vec<String>>>,
+    req: Request<Body>,
+    next: Next,
+) -> Response {
+    let Some(origin) = req.headers().get(header::ORIGIN).cloned() else {
+        // No Origin: not a browser cross-origin request at all — curl, the
+        // `note` CLI, a same-origin GET. There is nothing to authorise, and
+        // adding CORS headers to the response would be meaningless.
+        return next.run(req).await;
+    };
+
+    let permitted = origin
+        .to_str()
+        .is_ok_and(|o| allowed.iter().any(|a| a == o));
+
+    if !permitted {
+        // Refuse *before* the handler runs. Merely withholding the
+        // Access-Control-Allow-Origin header would only stop the browser from
+        // reading the response — a simple GET, or a `text/plain` POST, would
+        // still reach the store and take effect. The read is what the audit
+        // demonstrated; the write is what withholding a header would miss.
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
     let response = if req.method() == Method::OPTIONS {
         StatusCode::NO_CONTENT.into_response() // preflight
     } else {
         next.run(req).await
     };
-    with_cors_headers(response)
+    with_cors_headers(response, origin)
 }
 
-fn with_cors_headers(mut response: Response) -> Response {
+fn with_cors_headers(mut response: Response, origin: HeaderValue) -> Response {
     let headers = response.headers_mut();
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        HeaderValue::from_static("*"),
-    );
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+    // The response now varies by request origin; without this a shared cache
+    // could hand one origin's allowance to another.
+    headers.insert(header::VARY, HeaderValue::from_static("origin"));
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
         HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
@@ -236,16 +289,22 @@ async fn proxy_to_vite(mut req: Request<Body>) -> Response {
     }
 }
 
+/// The port we listen on: `FLOATNOTES_PORT` if set, else [`DEFAULT_PORT`].
+/// Fail-loud on an unparseable value — never a silent fallback port.
+fn configured_port() -> Result<u16, String> {
+    match std::env::var("FLOATNOTES_PORT") {
+        Ok(raw) => raw
+            .parse::<u16>()
+            .map_err(|e| format!("invalid FLOATNOTES_PORT {raw:?}: {e}")),
+        Err(_) => Ok(DEFAULT_PORT),
+    }
+}
+
 /// Bind 127.0.0.1:<port> and serve forever. Errors are returned (not
 /// swallowed) so the caller can surface them in the panel — fail-fast, no
 /// silent fallback port.
 pub async fn serve(store: NoteStore, tx: broadcast::Sender<Event>) -> Result<(), String> {
-    let port = match std::env::var("FLOATNOTES_PORT") {
-        Ok(raw) => raw
-            .parse::<u16>()
-            .map_err(|e| format!("invalid FLOATNOTES_PORT {raw:?}: {e}"))?,
-        Err(_) => DEFAULT_PORT,
-    };
+    let port = configured_port()?;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
         .await
         .map_err(|e| format!("could not bind 127.0.0.1:{port}: {e}"))?;
@@ -495,11 +554,13 @@ mod tests {
     #[tokio::test]
     async fn api_responses_carry_cors_headers_for_the_webview() {
         let (_tmp, _store, app) = test_app();
+        // The release webview's origin — echoed back, not `*`.
         let resp = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/api/notes")
+                    .header("origin", "tauri://localhost")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -507,8 +568,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             resp.headers().get("access-control-allow-origin").unwrap(),
-            "*"
+            "tauri://localhost"
         );
+        assert_eq!(resp.headers().get("vary").unwrap(), "origin");
 
         // Preflight for PUT/POST/DELETE with a JSON body.
         let resp = app
@@ -516,6 +578,7 @@ mod tests {
                 Request::builder()
                     .method("OPTIONS")
                     .uri("/api/notes/some-id")
+                    .header("origin", "http://127.0.0.1:1420")
                     .body(Body::empty())
                     .unwrap(),
             )

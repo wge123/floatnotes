@@ -9,6 +9,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 
 import { EditorKeymap } from "./editor-keymap";
+import { EmptyTaskParse } from "./empty-task-parse";
 import { TaskListInputRule } from "./task-input-rule";
 
 /**
@@ -25,6 +26,8 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     Link.configure({ openOnClick: false, autolink: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    // Must follow TaskList: it hooks the markdown-it rule TaskList installs.
+    EmptyTaskParse,
     TaskListInputRule,
     Placeholder.configure({ placeholder }),
     Markdown.configure({

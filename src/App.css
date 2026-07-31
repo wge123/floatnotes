@@ -101,7 +101,12 @@ body {
 }
 
 .floatnotes-editor ul[data-type="taskList"] li[data-checked="true"] > div {
-  color: #9ca3af; /* gray-400 */
+  /* gray-500, not gray-400: completed items are deliberately de-emphasised,
+     but gray-400 measures 2.54:1 on white — WCAG 1.4.3 has no exemption for
+     "it's meant to look faded", and the line-through does not substitute for
+     contrast. gray-500 is 4.83:1, still obviously muted next to the 19.17:1
+     of open items. */
+  color: #6b7280;
   text-decoration: line-through;
 }
 

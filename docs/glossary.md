@@ -41,9 +41,14 @@ after creation.
 The browser gate on requests from a public page to a private/loopback address.
 Chrome preflights such requests and expects
 `Access-Control-Allow-Private-Network: true`, which the FloatNotes server never
-sends — so it plausibly blocks an `https://` page from reading `:4949` while
-leaving `http://` and `file://` origins unblocked. Whether it does in practice
-is what the audit's CORS probe measures. See ADR 0007.
+sends, so Chromium blocks them.
+
+**PNA is not a security boundary — it is one browser's courtesy.** The audit's
+probe measured WebKit 26.5 and Firefox 153 doing the thing Chromium refuses:
+reading the whole notes corpus cross-origin and accepting `POST` / `DELETE`.
+Relying on it is what let `Access-Control-Allow-Origin: *` look safe for as long
+as it did. The server now runs an origin allowlist instead (`server.rs`
+`allowed_origins`), which does not depend on browser behaviour. See ADR 0007.
 
 ### Sidecar
 

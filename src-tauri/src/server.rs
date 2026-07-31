@@ -591,6 +591,132 @@ mod tests {
             .is_some());
     }
 
+    /// The finding itself: a page on the open web, in a browser that does not
+    /// implement Private Network Access, must not be able to read the notes.
+    #[tokio::test]
+    async fn a_foreign_origin_cannot_read_the_notes() {
+        let (_tmp, store, app) = test_app();
+        store.create("secret note").expect("seed a note");
+
+        for origin in ["https://evil.example", "http://evil.example", "null"] {
+            let resp = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/notes")
+                        .header("origin", origin)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                resp.status(),
+                StatusCode::FORBIDDEN,
+                "origin {origin} should be refused outright"
+            );
+            assert!(
+                resp.headers().get("access-control-allow-origin").is_none(),
+                "origin {origin} must not be echoed back"
+            );
+        }
+    }
+
+    /// Refusal has to happen before the handler, not just in the response
+    /// headers — otherwise the delete still takes effect and only the
+    /// confirmation is hidden from the caller.
+    #[tokio::test]
+    async fn a_foreign_origin_cannot_delete_a_note() {
+        let (_tmp, store, app) = test_app();
+        let note = store.create("keep me").expect("seed a note");
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api/notes/{}", note.id))
+                    .header("origin", "https://evil.example")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        assert!(
+            store.read(&note.id).is_ok(),
+            "the note must still exist — a refused request must have no effect"
+        );
+    }
+
+    /// Non-browser callers (curl, the `note` CLI) send no Origin at all and
+    /// must keep working: CORS governs browsers, not local processes.
+    #[tokio::test]
+    async fn a_request_without_an_origin_is_untouched() {
+        let (_tmp, _store, app) = test_app();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/notes")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(resp.headers().get("access-control-allow-origin").is_none());
+    }
+
+    #[tokio::test]
+    async fn the_webview_dev_server_and_self_origins_are_allowed() {
+        let (_tmp, _store, app) = test_app();
+        for origin in [
+            "tauri://localhost",
+            "http://localhost:1420",
+            "http://127.0.0.1:1420",
+            "http://localhost:4949",
+            "http://127.0.0.1:4949",
+        ] {
+            let resp = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/notes")
+                        .header("origin", origin)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "origin {origin} rejected");
+            assert_eq!(
+                resp.headers().get("access-control-allow-origin").unwrap(),
+                origin,
+                "origin {origin} should be echoed verbatim"
+            );
+        }
+    }
+
+    /// WebSockets are exempt from CORS in the browser but still carry Origin,
+    /// and /ws streams every note change — so it needs the same gate. The
+    /// middleware runs ahead of the handshake, so a bare request is enough to
+    /// show the gate covers this route.
+    #[tokio::test]
+    async fn a_foreign_origin_cannot_reach_the_event_socket() {
+        let (_tmp, _store, app) = test_app();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/ws")
+                    .header("origin", "https://evil.example")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
     #[tokio::test]
     async fn health_returns_ok() {
         let (_tmp, _store, app) = test_app();

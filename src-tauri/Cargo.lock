@@ -1036,6 +1036,7 @@ name = "floatnotes"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "hyper",
  "hyper-util",
  "notify",
  "objc2-service-management",

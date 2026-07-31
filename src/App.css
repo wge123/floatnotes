@@ -33,9 +33,33 @@ body {
   flex-direction: column;
 }
 
+/* Focus indicator for the editor (a11y M2 — WCAG 2.4.7). A full ring is wrong
+   here: contenteditable always matches :focus-visible while focused, so a box
+   around the note body would be on screen essentially the whole session. A 2px
+   accent rail down the leading edge is painted on the focused element itself
+   (so an automated focus-visibility sweep sees it), stays quiet while typing,
+   and carries real information — it disappears the moment focus moves to the
+   find bar or an overlay. The negative margin lets the rail sit in the host's
+   px-4 gutter instead of on top of the first character; text does not move. */
 .floatnotes-editor .tiptap {
   flex: 1 0 auto;
-  outline: none; /* focus ring off — the panel is the frame */
+  margin-left: -0.5rem;
+  padding-left: 0.5rem;
+  outline: none; /* replaced by the rail below, not removed outright */
+}
+
+.floatnotes-editor .tiptap:focus-visible {
+  box-shadow: inset 2px 0 0 0 #2563eb; /* blue-600 */
+}
+
+/* The three overlay search fields (note switcher, action panel, find bar) are
+   full-bleed inside a rounded, overflow-hidden container, so an outset ring is
+   clipped by the corner. Inset ring instead. Each one previously set
+   `outline: none` with nothing in its place while being the primary keyboard
+   entry point into its overlay (a11y M2). */
+.floatnotes-focus-inset:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px #2563eb; /* blue-600 */
 }
 
 /* Tighten list rhythm: prose-sm gives each <li> a big top/bottom margin AND

@@ -61,7 +61,7 @@ function FormatButton({
         className={`flex h-6 min-w-6 items-center justify-center rounded border-none px-1 font-mono text-xs shadow-none ${
           active
             ? "bg-gray-200 text-gray-900"
-            : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+            : "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:bg-gray-100 focus-visible:text-gray-800"
         }`}
       >
         {children}
@@ -108,7 +108,12 @@ export default function FormatBar({ editor }: FormatBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-0.5">
+    // `shrink-0 max-w-full`: hold the glyph row at its natural width (~316px,
+    // which is what sets the window's 360px minWidth) so the word count is
+    // what wraps first, but never exceed the bar — then `flex-wrap` folds the
+    // glyphs themselves under text zoom rather than letting the
+    // overflow-hidden app root clip them away.
+    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-0.5">
       <div ref={popoverRef} className="relative">
         <FormatButton
           label="Heading"

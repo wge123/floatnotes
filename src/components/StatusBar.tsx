@@ -31,7 +31,7 @@ export default function StatusBar({ markdown }: StatusBarProps) {
       <button
         type="button"
         onClick={() => setMode((m) => (m === "words" ? "chars" : "words"))}
-        className="shrink-0 cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-xs text-gray-500 shadow-none hover:text-gray-800"
+        className="shrink-0 cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-xs text-gray-500 shadow-none hover:text-gray-800 focus-visible:text-gray-800"
       >
         {label}
       </button>

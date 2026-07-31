@@ -1,3 +1,5 @@
+import { cloneElement, useId, type ReactElement } from "react";
+
 /**
  * Hover hint for the bottom-bar controls: label plus the chord that runs the
  * same command from the keyboard.
@@ -7,6 +9,12 @@
  * floating panel. Anchored to a control edge instead of centred because the
  * app root is `overflow-hidden`, so a centred hint on the first/last control
  * would be clipped.
+ *
+ * a11y M3: the hint also reveals on `group-focus-within`, and its id is cloned
+ * onto the wrapped control as `aria-describedby`. Its payload is the keyboard
+ * chord, so hover-only put it out of reach of exactly the users most motivated
+ * to learn it — and `role="tooltip"` with nothing referencing it was invisible
+ * to screen readers too.
  */
 export interface TooltipProps {
   label: string;
@@ -16,7 +24,8 @@ export interface TooltipProps {
   align?: "left" | "right";
   /** Above the control (default) or below — the title bar has no room above. */
   side?: "top" | "bottom";
-  children: React.ReactNode;
+  /** Exactly one element — the hint's id is cloned onto it as a description. */
+  children: ReactElement<{ "aria-describedby"?: string }>;
 }
 
 export default function Tooltip({
@@ -26,12 +35,15 @@ export default function Tooltip({
   side = "top",
   children,
 }: TooltipProps) {
+  const hintId = useId();
+
   return (
     <span className="group/tooltip relative flex shrink-0">
-      {children}
+      {cloneElement(children, { "aria-describedby": hintId })}
       <span
+        id={hintId}
         role="tooltip"
-        className={`pointer-events-none absolute z-50 hidden select-none whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] leading-none text-white shadow-lg group-hover/tooltip:block ${
+        className={`pointer-events-none absolute z-50 hidden select-none whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] leading-none text-white shadow-lg group-hover/tooltip:block group-focus-within/tooltip:block ${
           align === "right" ? "right-0" : "left-0"
         } ${side === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
       >

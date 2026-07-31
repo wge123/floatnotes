@@ -674,4 +674,81 @@ mod tests {
             Err(broadcast::error::TryRecvError::Empty)
         ));
     }
+
+    /// Dev-only regression: the Vite HMR WebSocket has to survive the :4949
+    /// proxy. Forwarding the 101 without splicing the upgraded sockets left
+    /// the HMR client connected-but-deaf, so it looped on "server connection
+    /// lost" ~40×/s and the app never mounted (todo af35991c). A stub Vite
+    /// echoes one frame; the bytes only arrive if both halves are bridged.
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    async fn dev_proxy_bridges_the_upgraded_websocket_stream() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        async fn echo_ws(ws: WebSocketUpgrade) -> Response {
+            ws.on_upgrade(|mut socket: WebSocket| async move {
+                while let Some(Ok(msg)) = socket.recv().await {
+                    if let Message::Text(text) = msg {
+                        let _ = socket.send(Message::Text(text)).await;
+                    }
+                }
+            })
+        }
+
+        let upstream = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let upstream_port = upstream.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            axum::serve(upstream, Router::new().route("/vite-hmr", get(echo_ws)))
+                .await
+                .unwrap()
+        });
+        std::env::set_var("FLOATNOTES_VITE_PORT", upstream_port.to_string());
+
+        let (_tmp, _store, app) = test_app();
+        let proxy = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_port = proxy.local_addr().unwrap().port();
+        tokio::spawn(async move { axum::serve(proxy, app).await.unwrap() });
+
+        // 16 zero-ish bytes, base64 — any well-formed nonce does; the test
+        // never checks the derived accept, only that 101 comes back.
+        let nonce = format!("{}==", "A".repeat(22));
+        let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", proxy_port))
+            .await
+            .unwrap();
+        sock.write_all(
+            format!(
+                "GET /vite-hmr HTTP/1.1\r\n\
+                 Host: 127.0.0.1\r\n\
+                 Connection: Upgrade\r\n\
+                 Upgrade: websocket\r\n\
+                 Sec-WebSocket-Version: 13\r\n\
+                 Sec-WebSocket-Key: {nonce}\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+
+        let mut head = [0u8; 512];
+        let n = sock.read(&mut head).await.unwrap();
+        let head = String::from_utf8_lossy(&head[..n]);
+        assert!(head.starts_with("HTTP/1.1 101"), "handshake: {head}");
+
+        // Masked client text frame "hi" (mask key 0x00000000 → payload as-is).
+        // Pre-fix this byte sequence vanished into the un-bridged socket.
+        sock.write_all(&[0x81, 0x82, 0, 0, 0, 0, b'h', b'i'])
+            .await
+            .unwrap();
+
+        let mut echo = [0u8; 8];
+        let n = tokio::time::timeout(Duration::from_secs(5), sock.read(&mut echo))
+            .await
+            .expect("echo within 5s — proxy never bridged the upgraded stream")
+            .unwrap();
+        assert_eq!(
+            &echo[..n],
+            &[0x81, 0x02, b'h', b'i'],
+            "expected an unmasked server echo frame"
+        );
+    }
 }

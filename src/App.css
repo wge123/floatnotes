@@ -110,6 +110,27 @@ body {
   text-decoration: line-through;
 }
 
+/* Links. prose paints `a` gray-900 + underline + font-weight 500, which beside
+   gray-700 body text reads as slightly-bolder prose rather than as a link. Use
+   the same blue-600 as the focus rail (5.17:1 on the bg-white app container, so
+   WCAG 1.4.3 AA) and keep prose's underline, which is what carries the signal
+   for anyone who cannot separate the two by colour (1.4.1). Weight returns to
+   inherit: colour plus underline is already unambiguous, and bolding link text
+   disturbed the rhythm of the line it sits in.
+
+   No `cursor: pointer`: a plain click places the caret (see lib/link-click.ts),
+   and a pointer cursor would promise a navigation that only Cmd-click performs.
+   The hover underline is the affordance instead. */
+.floatnotes-editor a {
+  color: #2563eb; /* blue-600 */
+  font-weight: inherit;
+  text-decoration-color: rgb(37 99 235 / 0.45);
+}
+
+.floatnotes-editor a:hover {
+  text-decoration-color: #2563eb;
+}
+
 /* Tables. The panel is 360px wide at its minimum and the app root is
    overflow-hidden, so a table wider than the note body would be clipped away
    rather than reachable. `display: block` + `width: max-content` turns the

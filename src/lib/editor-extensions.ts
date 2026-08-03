@@ -14,7 +14,24 @@ import { Markdown } from "tiptap-markdown";
 
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskParse } from "./empty-task-parse";
+import { LinkClick } from "./link-click";
 import { TaskListInputRule } from "./task-input-rule";
+
+/**
+ * `[text](url "Tip")` carries a title, and TipTap's Link mark declares only
+ * href/target/rel/class, so the title was dropped on parse and the next save
+ * wrote the link back without it. prosemirror-markdown's link serializer
+ * already emits a title when the mark has one, so declaring the attribute is
+ * the whole fix.
+ */
+const LinkWithTitle = Link.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      title: { default: null },
+    };
+  },
+});
 
 /**
  * The one extension list every FloatNotes editor instance uses — the React
@@ -27,7 +44,10 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       heading: { levels: [1, 2, 3] },
     }),
     Underline,
-    Link.configure({ openOnClick: false, autolink: true }),
+    // openOnClick stays false because the caret has to win a plain click inside
+    // a contenteditable; LinkClick (below) puts opening behind Cmd-click.
+    LinkWithTitle.configure({ openOnClick: false, autolink: true }),
+    LinkClick,
     TaskList,
     TaskItem.configure({ nested: true }),
     // Must follow TaskList: it hooks the markdown-it rule TaskList installs.
@@ -53,6 +73,20 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       // underline syntax, and with html:false tiptap-markdown silently drops
       // it on save (warns "underline mark is only available in html mode").
       html: true,
+      // linkify:true is what makes a bare URL sitting in a note file render as
+      // a link. `autolink: true` on the Link mark only covers URLs the user
+      // TYPES; markdown-it decides what a loaded file's text becomes, and with
+      // linkify off (its default) a note full of pasted URLs rendered as plain
+      // grey text.
+      //
+      // The cost, accepted deliberately: this is the one place FloatNotes
+      // rewrites a note's markdown rather than preserving it byte for byte.
+      // prosemirror-markdown re-emits a linkified URL in its canonical form, so
+      // the next save turns `https://x` into `<https://x>`, `www.x` into
+      // `[www.x](http://www.x)`, and `a@b.com` into `[a@b.com](mailto:a@b.com)`.
+      // Every rewrite is idempotent (round-trip tests cover it) and semantically
+      // identical, so a note converges after one save instead of drifting.
+      linkify: true,
       bulletListMarker: "-",
       transformPastedText: true,
       transformCopiedText: true,

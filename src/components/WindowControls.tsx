@@ -145,7 +145,7 @@ export default function WindowControls() {
       // The title bar turns a press into a window drag; a press on a light
       // must not do both.
       onMouseDown={(e) => e.stopPropagation()}
-      className="group absolute left-3 z-10 flex items-center gap-2"
+      className="group/lights absolute left-3 z-10 flex items-center gap-2"
     >
       {lights.map((light) => (
         <Tooltip key={light.id} label={light.label} align="left" side="bottom">
@@ -155,7 +155,10 @@ export default function WindowControls() {
             onClick={light.run}
             className={`flex h-3 w-3 items-center justify-center rounded-full ${light.color} text-[8px] leading-none font-bold text-black/60 focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 focus-visible:outline-none`}
           >
-            <span className="opacity-0 group-hover:opacity-100">
+            {/* a11y M3: the glyphs reveal on keyboard focus too, not just
+                hover, so tabbing to a light shows which one it is. Same named
+                -group idiom as Tooltip. */}
+            <span className="opacity-0 group-hover/lights:opacity-100 group-focus-within/lights:opacity-100">
               {light.glyph}
             </span>
           </button>

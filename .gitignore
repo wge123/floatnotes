@@ -41,5 +41,5 @@ skills-lock.json
 .claude/worktrees/
 .claude/settings.json
 
-# cmux cockpit local scratch (also matched by *.log above; explicit for clarity)
-.cmux/edits.log
+# cmux cockpit: machine-local config, scripts and scratch, never shared
+.cmux/

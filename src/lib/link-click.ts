@@ -22,13 +22,38 @@ export function shouldOpen(href: string | null | undefined): href is string {
 }
 
 /**
+ * The browser a link is handed to, by application name rather than by letting
+ * LaunchServices pick.
+ *
+ * Two Zen installs live on this machine, a personal one and a work one, and
+ * BOTH declare the bundle identifier `app.zen-browser.zen`. LaunchServices
+ * resolves the default http/https handler by bundle id, so it cannot tell them
+ * apart and links land in whichever it resolves first, which in practice is the
+ * work profile. Setting the default browser cannot fix that: both apps *are*
+ * the default browser.
+ *
+ * Naming the app sidesteps the collision, because `open -a <name>` resolves by
+ * name. This is the same escape hatch `~/bin/zen-route` already uses.
+ *
+ * The alternative was giving the work install its own bundle id, which was
+ * measured and rejected: it requires re-signing a Developer-ID + hardened
+ * runtime app, and an ad-hoc re-sign has to drop
+ * `com.apple.developer.web-browser.public-key-credential` (team-bound) to launch
+ * at all, which would break passkeys in that browser.
+ */
+const EXTERNAL_BROWSER = "Zen Browser";
+
+/**
  * Hand a link's href to the OS. Tauri's opener plugin in the app; `window.open`
  * on the plain-browser surface (`http://localhost:4949/`, dev harness), which
  * is a supported way to run the frontend and has no IPC bridge to call.
+ *
+ * The plain-browser branch cannot choose an application, so it keeps the
+ * system default. That surface is a dev affordance, not the shipping path.
  */
 export function openExternal(href: string): void {
   if (inTauri) {
-    void openUrl(href);
+    void openUrl(href, EXTERNAL_BROWSER);
     return;
   }
   window.open(href, "_blank", "noopener,noreferrer");

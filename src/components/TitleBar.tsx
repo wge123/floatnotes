@@ -6,6 +6,7 @@ import {
 
 import { isClick, nextWindowPosition, type DragStart } from "../lib/drag";
 import Tooltip from "./Tooltip";
+import WindowControls from "./WindowControls";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -20,6 +21,11 @@ const inTauri = "__TAURI_INTERNALS__" in window;
  *
  * Click and drag share one mousedown: a press that releases without moving
  * past CLICK_SLOP is the copy gesture, anything further is a window move.
+ *
+ * The 76px side padding is not decoration: the native traffic lights overlay
+ * the webview's top-left corner (full_size_content_view in window.rs) and run
+ * to roughly x=60. Padding both sides by the same amount clears them while
+ * keeping the title centred in the window, the way macOS centres its own.
  */
 export interface TitleBarProps {
   title: string;
@@ -71,15 +77,18 @@ export default function TitleBar({ title, onCopyPath }: TitleBarProps) {
   );
 
   return (
-    <Tooltip label="Click to copy file path" align="left" side="bottom">
-      <div
-        onMouseDown={onMouseDown}
-        className="flex h-9 w-full shrink-0 cursor-default items-center justify-center border-b border-gray-200 px-10"
-      >
-        <span className="pointer-events-none select-none truncate text-xs font-medium text-gray-500">
-          {title}
-        </span>
-      </div>
-    </Tooltip>
+    <div className="relative flex h-9 w-full shrink-0 items-center">
+      <WindowControls />
+      <Tooltip label="Click to copy file path" align="left" side="bottom">
+        <div
+          onMouseDown={onMouseDown}
+          className="flex h-9 w-full cursor-default items-center justify-center border-b border-gray-200 px-[76px]"
+        >
+          <span className="pointer-events-none select-none truncate text-xs font-medium text-gray-500">
+            {title}
+          </span>
+        </div>
+      </Tooltip>
+    </div>
   );
 }

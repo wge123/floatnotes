@@ -40,6 +40,12 @@ export interface FormatCommand {
 /** Chord for the ⌘L link toggle — owned by the keymap, shown by the toolbar. */
 export const LINK_SHORTCUT = "⌘L";
 
+/** Chord for the table insert, owned by the keymap, shown by the toolbar. */
+export const TABLE_SHORTCUT = "⌥⌘T";
+
+/** Shape of a freshly inserted table: a header row plus two body rows. */
+export const NEW_TABLE_SIZE = { rows: 3, cols: 3 } as const;
+
 export const HEADING_LEVELS = [1, 2, 3] as const;
 
 export function headingCommand(level: 1 | 2 | 3): FormatCommand {
@@ -134,6 +140,23 @@ export const FORMAT_COMMANDS: readonly FormatCommand[] = [
     isActive: (editor) => editor.isActive("taskList"),
   },
 ];
+
+/**
+ * Insert a table at the caret. Not a FormatCommand: those are toggles, and the
+ * toolbar's round-trip test runs each one twice expecting it to switch off.
+ *
+ * The header row is not optional (ADR 0013). tiptap-markdown refuses to emit
+ * pipe syntax when the first row holds a plain cell, and silently writes a raw
+ * <table> HTML blob into the .md file instead, so every table the UI can
+ * produce starts header-first and stays markdown.
+ */
+export function insertTable(editor: Editor): void {
+  editor
+    .chain()
+    .focus()
+    .insertTable({ ...NEW_TABLE_SIZE, withHeaderRow: true })
+    .run();
+}
 
 /**
  * Toggle a link on the current selection: active link → remove; otherwise ask

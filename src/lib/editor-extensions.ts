@@ -2,6 +2,10 @@ import SearchAndReplace from "@sereneinserenade/tiptap-search-and-replace";
 import type { Editor } from "@tiptap/core";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import Table from "@tiptap/extension-table";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import TableRow from "@tiptap/extension-table-row";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import Underline from "@tiptap/extension-underline";
@@ -29,6 +33,20 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     // Must follow TaskList: it hooks the markdown-it rule TaskList installs.
     EmptyTaskParse,
     TaskListInputRule,
+    // Tables are schema-only: markdown-it already parses pipe syntax under the
+    // default preset, and tiptap-markdown ships a serializer it matches to
+    // whichever extension registers a node literally named "table". Order is
+    // free here. Unlike EmptyTaskParse, none of these hook another extension's
+    // markdown-it rule.
+    //
+    // resizable stays off (its default, restated because the reason is not
+    // obvious): the column-resize plugin listens on the same pointer stream
+    // lib/drag.ts uses to move the NSPanel, so a drag near a column edge would
+    // be ambiguous. Column widths have no markdown representation anyway.
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
     Placeholder.configure({ placeholder }),
     Markdown.configure({
       // html:true so the Underline mark round-trips as <u> — markdown has no

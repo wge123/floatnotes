@@ -110,6 +110,51 @@ body {
   text-decoration: line-through;
 }
 
+/* Tables. The panel is 360px wide at its minimum and the app root is
+   overflow-hidden, so a table wider than the note body would be clipped away
+   rather than reachable. `display: block` + `width: max-content` turns the
+   table itself into the scroll container (the GitHub-markdown approach): it
+   keeps its natural column widths, scrolls horizontally on its own, and never
+   widens the document. Table.configure({resizable:false}) means there is no
+   .tableWrapper div to hang this on. */
+.floatnotes-editor table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+/* prose gives header cells a bottom border only. Cells need all four edges to
+   read as a grid at this size, and the caret needs to show which cell it is
+   in. Collapsed borders don't survive `display: block` on the table, so each
+   cell draws its own and adjacent ones overlap by -1px. */
+.floatnotes-editor :is(th, td) {
+  border: 1px solid #d1d5db; /* gray-300 */
+  padding: 0.25rem 0.5rem;
+  vertical-align: top;
+}
+
+.floatnotes-editor th {
+  background: #f9fafb; /* gray-50 */
+  font-weight: 600;
+}
+
+/* Cells hold a paragraph, which carries prose's vertical margin; collapse it
+   the same way the list rules above do so a row is one line tall. */
+.floatnotes-editor :is(th, td) > p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* prosemirror-tables marks the cells of a multi-cell (drag) selection. Without
+   this they look unselected, since the usual text-selection highlight doesn't
+   span cells. */
+.floatnotes-editor .selectedCell {
+  background: rgb(37 99 235 / 0.08); /* blue-600/8 */
+}
+
 /* ⌘F match highlight (search-and-replace extension, see editor-extensions). */
 .search-result {
   background: rgb(253 224 71 / 0.6); /* yellow-300/60 */

@@ -1,5 +1,7 @@
 import { Extension } from "@tiptap/core";
 
+import { insertTable } from "./format";
+
 /**
  * Editor-scoped Raycast Notes formatting keymap (step 02 contract).
  *
@@ -41,6 +43,22 @@ export const EditorKeymap = Extension.create({
       "Mod-Alt-3": () => this.editor.commands.toggleHeading({ level: 3 }),
       "Mod-Alt-c": () => this.editor.commands.toggleCodeBlock(),
       "Mod-Shift-b": () => this.editor.commands.toggleBlockquote(),
+
+      // Tables
+      "Mod-Alt-t": () => {
+        insertTable(this.editor);
+        return true;
+      },
+
+      // A cell holding two blocks is not markdown-serializable, and
+      // tiptap-markdown answers that by silently writing a raw <table> HTML
+      // blob into the note (ADR 0013). Enter is the one-keystroke route into
+      // that state, so inside a cell it does nothing at all; Tab and Shift-Tab
+      // (bound by the Table extension) still move between cells. Outside a
+      // table this returns false and the default Enter handling runs.
+      Enter: () =>
+        this.editor.isActive("tableCell") ||
+        this.editor.isActive("tableHeader"),
 
       // Lists
       "Mod-Shift-7": () => this.editor.commands.toggleOrderedList(),

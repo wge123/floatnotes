@@ -6,7 +6,9 @@ import {
   HEADING_LEVELS,
   headingCommand,
   inAnyHeading,
+  insertTable,
   LINK_SHORTCUT,
+  TABLE_SHORTCUT,
   toggleLink,
   type FormatCommand,
 } from "../lib/format";
@@ -171,6 +173,17 @@ export default function FormatBar({ editor }: FormatBarProps) {
           )}
         </Fragment>
       ))}
+      {/* Blocks end with the table. It inserts rather than toggles, so it sits
+          outside FORMAT_COMMANDS (see lib/format.ts) and never reads as
+          pressed: there is no "off" for it to report. */}
+      <FormatButton
+        label="Table"
+        shortcut={TABLE_SHORTCUT}
+        active={false}
+        onRun={() => insertTable(editor)}
+      >
+        ▦
+      </FormatButton>
     </div>
   );
 }

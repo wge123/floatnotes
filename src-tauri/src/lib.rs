@@ -1,4 +1,8 @@
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Emitter, Manager,
+};
 use tauri_nspanel::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::broadcast;
@@ -36,6 +40,49 @@ pub fn toggle(app: &AppHandle) {
     } else {
         show(app);
     }
+}
+
+/// Menubar icon: the permanent way back to the panel. The hotkey is a
+/// registration that can fail and the panel itself can be hidden, so without
+/// this an Accessory-policy app has no discoverable entry point at all.
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show_item = MenuItem::with_id(app, "show", "Show panel", true, Some("Alt+N"))?;
+    let hide_item = MenuItem::with_id(app, "hide", "Hide panel", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit FloatNotes", true, Some("Cmd+Q"))?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show_item,
+            &hide_item,
+            &PredefinedMenuItem::separator(app)?,
+            &quit_item,
+        ],
+    )?;
+
+    TrayIconBuilder::with_id("floatnotes-tray")
+        .icon(app.default_window_icon().cloned().expect("bundled icon"))
+        // NOT a template: the bundled icon is the full-colour app icon, and
+        // template rendering collapses it to a filled silhouette that reads as
+        // a blank square in the menubar. A real monochrome glyph could go back
+        // to template rendering.
+        .icon_as_template(false)
+        .menu(&menu)
+        // Left-click is the menu, not a toggle: a toggle would make the only
+        // always-available control the one that can hide the panel by accident.
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show(app),
+            "hide" => {
+                if let Ok(panel) = app.get_webview_panel(PANEL_LABEL) {
+                    panel.hide();
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .build(app)?;
+
+    Ok(())
 }
 
 /// Register the global summon hotkey (ADR 0001: ⌥N is the real default;
@@ -100,7 +147,21 @@ pub fn run() {
                 .expect("panel conversion did not register the panel");
             panel.show();
 
+            // The red traffic light hides, never destroys: the activation
+            // policy is Accessory, so a closed window would leave a running
+            // app with no window, no Dock tile and no way back except ⌥N.
+            let close_handle = app.app_handle().clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Ok(panel) = close_handle.get_webview_panel(PANEL_LABEL) {
+                        panel.hide();
+                    }
+                }
+            });
+
             register_hotkey(app.app_handle());
+            build_tray(app.app_handle())?;
 
             // Notes store + localhost server + watcher (contract: S03).
             let note_store = store::NoteStore::open_default()?;

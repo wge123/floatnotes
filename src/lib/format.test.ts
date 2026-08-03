@@ -6,6 +6,8 @@ import {
   FORMAT_COMMANDS,
   headingCommand,
   inAnyHeading,
+  insertTable,
+  NEW_TABLE_SIZE,
   toggleLink,
 } from "./format";
 
@@ -87,6 +89,41 @@ describe("headings", () => {
     expect(headingCommand(1).isActive(ed)).toBe(false);
     expect(inAnyHeading(ed)).toBe(true);
     expect(serializeMarkdown(ed)).toBe("## word");
+  });
+});
+
+describe("insertTable", () => {
+  // The whole point of ADR 0013. tiptap-markdown refuses pipe syntax when the
+  // first row holds a plain cell and silently writes a raw <table> blob into
+  // the .md file instead, so a header row is not a default here, it is the
+  // invariant.
+  it("inserts a header-first table that serializes as pipe markdown", () => {
+    const ed = createEditor("intro");
+    insertTable(ed);
+
+    const md = serializeMarkdown(ed);
+    expect(md).not.toContain("<table");
+    const [firstRow, delimiter] = md.split("\n");
+    expect(firstRow).toBe("|  |  |  |");
+    expect(delimiter).toBe("| --- | --- | --- |");
+  });
+
+  it("inserts the configured number of rows and columns", () => {
+    const ed = createEditor("intro");
+    insertTable(ed);
+
+    const rows = serializeMarkdown(ed)
+      .split("\n")
+      .filter((line) => line.startsWith("|"));
+    // Header + delimiter + the remaining body rows.
+    expect(rows).toHaveLength(NEW_TABLE_SIZE.rows + 1);
+    expect(rows[0].split("|")).toHaveLength(NEW_TABLE_SIZE.cols + 2);
+  });
+
+  it("leaves the caret inside the new table", () => {
+    const ed = createEditor("intro");
+    insertTable(ed);
+    expect(ed.isActive("table")).toBe(true);
   });
 });
 

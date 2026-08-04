@@ -25,6 +25,11 @@ use crate::store::{self, file_mtime, NoteStore, StoreError};
 pub const DEFAULT_PORT: u16 = 4949;
 /// Vite dev server (see vite.config.ts server.port — strictPort).
 const VITE_DEV_PORT: u16 = 1420;
+/// Friendly loopback alias for the app. Resolves only because the user put
+/// `127.0.0.1 notes.test` in /etc/hosts (see README); it is not DNS, and a
+/// machine without that line simply cannot reach this name. Listed as an
+/// allowed origin so the browser surface can POST/DELETE from it.
+const LOCAL_ALIAS: &str = "notes.test";
 const DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// `{type: "note-changed"|"note-deleted"|"notes-reindexed", id, mtime}`
@@ -109,6 +114,9 @@ fn allowed_origins() -> Vec<String> {
         // layer drives the app as a plain page here.
         format!("http://localhost:{port}"),
         format!("http://127.0.0.1:{port}"),
+        // Same server, reached by its /etc/hosts alias. Still loopback: the
+        // name resolves to 127.0.0.1 or it does not resolve at all.
+        format!("http://{LOCAL_ALIAS}:{port}"),
     ]
 }
 

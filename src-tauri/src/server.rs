@@ -606,7 +606,15 @@ mod tests {
         let (_tmp, store, app) = test_app();
         store.create("secret note").expect("seed a note");
 
-        for origin in ["https://evil.example", "http://evil.example", "null"] {
+        // The last two are look-alikes for the notes.test alias: the allowlist
+        // compares whole origin strings, never a suffix or a substring.
+        for origin in [
+            "https://evil.example",
+            "http://evil.example",
+            "null",
+            "http://notes.test.evil.example:4949",
+            "http://evil-notes.test:4949",
+        ] {
             let resp = app
                 .clone()
                 .oneshot(
@@ -684,6 +692,7 @@ mod tests {
             "http://127.0.0.1:1420",
             "http://localhost:4949",
             "http://127.0.0.1:4949",
+            "http://notes.test:4949",
         ] {
             let resp = app
                 .clone()

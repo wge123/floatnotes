@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "tauri": "tauri",
-    "app:install": "tauri build && osascript -e 'quit app \"FloatNotes\"' 2>/dev/null; rm -rf /Applications/FloatNotes.app && cp -R src-tauri/target/release/bundle/macos/FloatNotes.app /Applications/ && open -a FloatNotes"
+    "app:install": "tauri build && (osascript -e 'quit app \"FloatNotes\"' 2>/dev/null || true) && rm -rf /Applications/FloatNotes.app && cp -R src-tauri/target/release/bundle/macos/FloatNotes.app /Applications/ && open /Applications/FloatNotes.app"
   },
   "dependencies": {
     "@sereneinserenade/tiptap-search-and-replace": "^0.1.1",

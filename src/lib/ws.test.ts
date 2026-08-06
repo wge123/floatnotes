@@ -79,13 +79,28 @@ describe("decideSyncAction — clean/dirty × mtime decision table", () => {
     expect(decideSyncAction(event, open()).kind).toBe("ignore");
   });
 
-  it("notes-reindexed is ignored", () => {
+  // The server sends this only when it KNOWS it lost events (lagging socket,
+  // watch error, dead watcher). Ignoring it left the open note silently stale
+  // with nothing to compare mtimes against.
+  it("notes-reindexed reloads the open note when it is clean", () => {
     const event: SyncEvent = {
       type: "notes-reindexed",
       id: "",
       mtime: null,
     };
-    expect(decideSyncAction(event, open()).kind).toBe("ignore");
+    expect(decideSyncAction(event, open())).toEqual({
+      kind: "reload",
+      id: "hello-abc123",
+    });
+  });
+
+  it("notes-reindexed is ignored while the editor is dirty", () => {
+    const event: SyncEvent = {
+      type: "notes-reindexed",
+      id: "",
+      mtime: null,
+    };
+    expect(decideSyncAction(event, open({ dirty: true })).kind).toBe("ignore");
   });
 
   it("no open note → every event is ignored", () => {

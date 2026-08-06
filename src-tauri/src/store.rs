@@ -540,6 +540,91 @@ mod tests {
         assert_eq!(trash_entries, 2);
     }
 
+    /// The documented data-loss shape: a rename onto a symlink swaps the link
+    /// for a regular file, so the edit lands in the notes dir, the file the
+    /// user actually pointed at keeps its old content, the link is destroyed,
+    /// and the save reports success.
+    #[test]
+    fn writing_through_a_symlink_updates_the_target_and_keeps_the_link() {
+        let (_tmp, store) = store();
+        let elsewhere = tempfile::tempdir().expect("target dir");
+        let target = elsewhere.path().join("real-note.md");
+        std::fs::write(&target, "# Original").unwrap();
+
+        let link = store.dir().join("linked-abc123.md");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let mtime = file_mtime(&link).unwrap();
+        store
+            .update("linked-abc123", "# Edited", mtime)
+            .expect("update through the symlink");
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "# Edited");
+        assert!(
+            std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+            "the symlink must survive its own write"
+        );
+        // The temp file lives beside the TARGET, not in the notes dir, or the
+        // rename would cross filesystems and stop being atomic.
+        assert!(temp_files(store.dir()).is_empty());
+        assert!(temp_files(elsewhere.path()).is_empty());
+    }
+
+    #[test]
+    fn a_dangling_symlink_is_an_error_not_a_fresh_file() {
+        let (_tmp, store) = store();
+        let link = store.dir().join("dangling-abc123.md");
+        std::os::unix::fs::symlink(store.dir().join("gone.md"), &link).unwrap();
+
+        let err = store
+            .create("# Seed")
+            .and_then(|_| store.update("dangling-abc123", "# Edited", 0))
+            .expect_err("a link to nowhere has no target to write");
+        assert!(matches!(err, StoreError::NotFound(_) | StoreError::Io(_)));
+    }
+
+    /// A half-written `.tmp-` is one rename away from being read as a note,
+    /// and the watcher/list already skip dotfiles, so a leaked one is invisible.
+    #[test]
+    fn a_failed_write_leaves_no_temp_file_behind() {
+        let (_tmp, store) = store();
+        // A directory where the sidecar file belongs: the temp file is written
+        // fine and the rename onto it fails, which is the window a leaked
+        // `.tmp-` opens.
+        std::fs::create_dir(store.dir().join(SIDECAR_NAME)).unwrap();
+
+        assert!(store.sidecar_save(&Sidecar::default()).is_err());
+        assert!(
+            temp_files(store.dir()).is_empty(),
+            "leftover temp files: {:?}",
+            temp_files(store.dir())
+        );
+    }
+
+    #[test]
+    fn an_unreadable_sidecar_is_an_error_not_empty_defaults() {
+        let (_tmp, store) = store();
+        // A directory where the sidecar should be: read_to_string fails with
+        // something other than NotFound, which must NOT read as "no pins yet".
+        std::fs::create_dir(store.dir().join(SIDECAR_NAME)).unwrap();
+        assert!(store.sidecar_load().is_err());
+    }
+
+    #[test]
+    fn a_missing_sidecar_is_defaults() {
+        let (_tmp, store) = store();
+        assert!(store.sidecar_load().expect("first run").pins.is_empty());
+    }
+
+    fn temp_files(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(".tmp-"))
+            .collect()
+    }
+
     #[test]
     fn ids_cannot_escape_the_notes_dir() {
         let (_tmp, store) = store();

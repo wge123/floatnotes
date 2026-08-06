@@ -913,6 +913,45 @@ mod tests {
         ));
     }
 
+    /// A watcher that stops is the app's quietest failure: every surface keeps
+    /// rendering while external edits stop arriving. Its death has to be
+    /// reported (banner) and told to the clients (reindex), not just end a
+    /// thread.
+    #[tokio::test]
+    async fn a_dead_watcher_reports_a_fault_and_asks_clients_to_resync() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = NoteStore::open(dir.path()).expect("open store");
+        let (tx, mut rx) = broadcast::channel(64);
+        let (fault_tx, fault_rx) = std::sync::mpsc::channel::<String>();
+
+        let watcher = spawn_watcher(store.dir().to_path_buf(), tx, move |message| {
+            let _ = fault_tx.send(message);
+        })
+        .expect("watcher");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // Dropping the watcher is what a real death looks like from the
+        // event-loop's side: the sender goes away and `recv` fails forever.
+        drop(watcher);
+
+        let message = tokio::task::spawn_blocking(move || {
+            fault_rx.recv_timeout(Duration::from_secs(5))
+        })
+        .await
+        .unwrap()
+        .expect("the watch loop must report that it stopped");
+        assert!(
+            message.contains("restart"),
+            "the fault must tell the user what to do: {message}"
+        );
+
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("resync event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "notes-reindexed");
+    }
+
     /// Dev-only regression: the Vite HMR WebSocket has to survive the :4949
     /// proxy. Forwarding the 101 without splicing the upgraded sockets left
     /// the HMR client connected-but-deaf, so it looped on "server connection

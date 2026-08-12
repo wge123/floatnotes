@@ -181,3 +181,17 @@ body {
   background: rgb(253 224 71 / 0.6); /* yellow-300/60 */
   border-radius: 2px;
 }
+
+/* Reveal-on-caret markdown markers (RevealMarkers, see lib/reveal-markers.ts).
+   Widget decorations, never document text, so they must read as scenery: dimmed
+   enough to stay out of the way of the prose, opaque enough to be legible while
+   you are editing the syntax they describe.
+
+   user-select:none matters beyond aesthetics. These spans sit inside the
+   contenteditable, so without it a ⌘A-copy would carry marker characters into
+   the clipboard that the document does not contain. */
+.floatnotes-editor .reveal-marker {
+  color: rgb(100 116 139 / 0.75); /* slate-500/75 */
+  user-select: none;
+  -webkit-user-select: none;
+}

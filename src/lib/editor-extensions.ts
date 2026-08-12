@@ -15,6 +15,7 @@ import { Markdown } from "tiptap-markdown";
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskParse } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
+import { RevealMarkers } from "./reveal-markers";
 import { TaskListInputRule } from "./task-input-rule";
 
 /**
@@ -95,6 +96,10 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       searchResultClass: "search-result", // styled in App.css
       disableRegex: true, // FindBar is a literal-text find
     }),
+    // Decoration-only, so position in this list is free: it reads the selection
+    // and draws widgets, and hooks no other extension's rules. ADR 0005's
+    // post-v1 reveal-on-caret.
+    RevealMarkers,
     EditorKeymap,
   ];
 }

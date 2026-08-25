@@ -15,6 +15,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -226,15 +227,21 @@ impl NoteStore {
         self.read(id)
     }
 
-    pub fn sidecar_load(&self) -> Sidecar {
+    /// Missing sidecar = defaults (first run). An unreadable one is an ERROR,
+    /// never defaults: the caller writes the value it was handed straight back
+    /// on the next pin/zoom change, so answering a read failure with an empty
+    /// Sidecar erases the real pins and order a moment later.
+    pub fn sidecar_load(&self) -> Result<Sidecar, StoreError> {
         let path = self.dir.join(SIDECAR_NAME);
         match fs::read_to_string(&path) {
-            Ok(raw) => serde_json::from_str(&raw).unwrap_or_else(|e| {
-                // On-disk file the user may hand-edit → warn, don't die.
+            Ok(raw) => Ok(serde_json::from_str(&raw).unwrap_or_else(|e| {
+                // On-disk file the user may hand-edit → warn, don't die. The
+                // content is unrecoverable either way, so defaults lose nothing.
                 eprintln!("[floatnotes] corrupt sidecar {}: {e} — using defaults", path.display());
                 Sidecar::default()
-            }),
-            Err(_) => Sidecar::default(),
+            })),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Sidecar::default()),
+            Err(e) => Err(StoreError::Io(e)),
         }
     }
 
@@ -269,14 +276,61 @@ impl NoteStore {
         unreachable!("suffix space exhausted");
     }
 
-    /// Atomic write: dot-prefixed temp file in the same dir (same filesystem,
+    /// Atomic write: dot-prefixed temp file beside the target (same filesystem,
     /// invisible to the watcher) + rename into place.
+    ///
+    /// Two things this has to get right, both of which lose data quietly when
+    /// they are missed:
+    ///
+    /// - **Symlinks are followed, not replaced.** `rename` over a symlink
+    ///   swaps the *link* for a regular file: the edit lands in the notes dir,
+    ///   the file the user actually pointed at is never touched, the link is
+    ///   destroyed, and nothing errors. Resolve first and write the real file.
+    /// - **The temp file is fsynced before the rename.** `rename` is atomic
+    ///   for the directory entry only; without the fsync a crash can commit
+    ///   the entry while the bytes are still in the page cache, leaving an
+    ///   empty or truncated note where a complete one used to be.
     fn atomic_write(&self, path: &Path, content: &str) -> io::Result<()> {
-        let tmp = self.dir.join(format!(".tmp-{}", random_suffix(0)));
-        fs::write(&tmp, content)?;
-        fs::rename(&tmp, path)?;
+        let resolved = resolve_symlink(path)?;
+        let parent = resolved.parent().ok_or_else(|| {
+            io::Error::other(format!("{} has no parent directory", resolved.display()))
+        })?;
+        let tmp = parent.join(format!(".tmp-{}", random_suffix(0)));
+
+        // A half-written temp file must never survive a failure: it is one
+        // rename away from being mistaken for a note.
+        if let Err(e) = write_and_sync(&tmp, content) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e);
+        }
+        if let Err(e) = fs::rename(&tmp, &resolved) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e);
+        }
         Ok(())
     }
+}
+
+/// Follow a symlink to the file it names (non-symlinks pass through). A
+/// dangling link is an error, not a silent "write a fresh file here".
+fn resolve_symlink(path: &Path) -> io::Result<PathBuf> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => fs::canonicalize(path).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{} is a symlink that cannot be resolved: {e}", path.display()),
+            )
+        }),
+        _ => Ok(path.to_path_buf()),
+    }
+}
+
+/// Write `content` to `path` and flush it to the physical device before
+/// returning. `fs::write` only reaches the page cache.
+fn write_and_sync(path: &Path, content: &str) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    file.write_all(content.as_bytes())?;
+    file.sync_all()
 }
 
 /// title = first non-empty line, leading `#`s stripped. Lines that are empty
@@ -486,6 +540,91 @@ mod tests {
         assert_eq!(trash_entries, 2);
     }
 
+    /// The documented data-loss shape: a rename onto a symlink swaps the link
+    /// for a regular file, so the edit lands in the notes dir, the file the
+    /// user actually pointed at keeps its old content, the link is destroyed,
+    /// and the save reports success.
+    #[test]
+    fn writing_through_a_symlink_updates_the_target_and_keeps_the_link() {
+        let (_tmp, store) = store();
+        let elsewhere = tempfile::tempdir().expect("target dir");
+        let target = elsewhere.path().join("real-note.md");
+        std::fs::write(&target, "# Original").unwrap();
+
+        let link = store.dir().join("linked-abc123.md");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let mtime = file_mtime(&link).unwrap();
+        store
+            .update("linked-abc123", "# Edited", mtime)
+            .expect("update through the symlink");
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "# Edited");
+        assert!(
+            std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+            "the symlink must survive its own write"
+        );
+        // The temp file lives beside the TARGET, not in the notes dir, or the
+        // rename would cross filesystems and stop being atomic.
+        assert!(temp_files(store.dir()).is_empty());
+        assert!(temp_files(elsewhere.path()).is_empty());
+    }
+
+    #[test]
+    fn a_dangling_symlink_is_an_error_not_a_fresh_file() {
+        let (_tmp, store) = store();
+        let link = store.dir().join("dangling-abc123.md");
+        std::os::unix::fs::symlink(store.dir().join("gone.md"), &link).unwrap();
+
+        let err = store
+            .create("# Seed")
+            .and_then(|_| store.update("dangling-abc123", "# Edited", 0))
+            .expect_err("a link to nowhere has no target to write");
+        assert!(matches!(err, StoreError::NotFound(_) | StoreError::Io(_)));
+    }
+
+    /// A half-written `.tmp-` is one rename away from being read as a note,
+    /// and the watcher/list already skip dotfiles, so a leaked one is invisible.
+    #[test]
+    fn a_failed_write_leaves_no_temp_file_behind() {
+        let (_tmp, store) = store();
+        // A directory where the sidecar file belongs: the temp file is written
+        // fine and the rename onto it fails, which is the window a leaked
+        // `.tmp-` opens.
+        std::fs::create_dir(store.dir().join(SIDECAR_NAME)).unwrap();
+
+        assert!(store.sidecar_save(&Sidecar::default()).is_err());
+        assert!(
+            temp_files(store.dir()).is_empty(),
+            "leftover temp files: {:?}",
+            temp_files(store.dir())
+        );
+    }
+
+    #[test]
+    fn an_unreadable_sidecar_is_an_error_not_empty_defaults() {
+        let (_tmp, store) = store();
+        // A directory where the sidecar should be: read_to_string fails with
+        // something other than NotFound, which must NOT read as "no pins yet".
+        std::fs::create_dir(store.dir().join(SIDECAR_NAME)).unwrap();
+        assert!(store.sidecar_load().is_err());
+    }
+
+    #[test]
+    fn a_missing_sidecar_is_defaults() {
+        let (_tmp, store) = store();
+        assert!(store.sidecar_load().expect("first run").pins.is_empty());
+    }
+
+    fn temp_files(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(".tmp-"))
+            .collect()
+    }
+
     #[test]
     fn ids_cannot_escape_the_notes_dir() {
         let (_tmp, store) = store();
@@ -507,12 +646,12 @@ mod tests {
             esc_behavior: Some("unfocus".into()),
         };
         store.sidecar_save(&sidecar).expect("save");
-        let loaded = store.sidecar_load();
+        let loaded = store.sidecar_load().expect("load");
         assert_eq!(loaded.pins, vec!["a"]);
         assert_eq!(loaded.order.len(), 2);
         assert_eq!(loaded.esc_behavior.as_deref(), Some("unfocus"));
         std::fs::write(store.dir().join(SIDECAR_NAME), "{not json").unwrap();
-        let recovered = store.sidecar_load();
+        let recovered = store.sidecar_load().expect("corrupt json still loads defaults");
         assert!(recovered.pins.is_empty());
     }
 }

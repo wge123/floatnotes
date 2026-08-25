@@ -391,8 +391,8 @@ async fn restore_note(
 
 /// Sidecar (pins / order / zoom). Served over REST so the plain-browser UI
 /// at :4949 shares the same pins as the panel — localStorage would silo them.
-async fn read_sidecar(State(state): State<AppState>) -> Json<store::Sidecar> {
-    Json(state.store.sidecar_load())
+async fn read_sidecar(State(state): State<AppState>) -> Result<Json<store::Sidecar>, ApiError> {
+    Ok(Json(state.store.sidecar_load()?))
 }
 
 async fn write_sidecar(
@@ -479,9 +479,15 @@ impl IntoResponse for ApiError {
 /// Watch the notes dir; debounce ~200ms; skip dotfiles (sidecar, temp files)
 /// and `.trash/`; broadcast note-changed / note-deleted per affected `.md`.
 /// The returned watcher must be kept alive for the app's lifetime.
+///
+/// `on_fault` fires once if the watch loop ever ends. A dead watcher is the
+/// app's worst silent failure (every surface keeps rendering happily while
+/// external edits stop arriving), so its death is reported rather than left
+/// on a channel nobody reads.
 pub fn spawn_watcher(
     dir: PathBuf,
     tx: broadcast::Sender<Event>,
+    on_fault: impl Fn(String) + Send + 'static,
 ) -> notify::Result<RecommendedWatcher> {
     let (raw_tx, raw_rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -493,7 +499,7 @@ pub fn spawn_watcher(
     std::thread::spawn(move || {
         while let Ok(first) = raw_rx.recv() {
             let mut paths: Vec<PathBuf> = Vec::new();
-            collect_note_paths(&dir, first, &mut paths);
+            let mut lost_events = collect_note_paths(&dir, first, &mut paths);
             // Debounce: keep draining until the dir has been quiet ~200ms.
             let mut deadline = Instant::now() + DEBOUNCE;
             loop {
@@ -503,7 +509,7 @@ pub fn spawn_watcher(
                 }
                 match raw_rx.recv_timeout(deadline - now) {
                     Ok(event) => {
-                        collect_note_paths(&dir, event, &mut paths);
+                        lost_events |= collect_note_paths(&dir, event, &mut paths);
                         deadline = Instant::now() + DEBOUNCE;
                     }
                     Err(_) => break,
@@ -520,15 +526,40 @@ pub fn spawn_watcher(
                 };
                 broadcast_event(&tx, event);
             }
+            if lost_events {
+                // Something changed but we could not attribute it to a path.
+                // Tell clients to resync rather than trust a gap they cannot see.
+                broadcast_event(&tx, Event::reindexed());
+            }
         }
+        // `recv` only fails once the watcher is gone. From here on nothing in
+        // this process notices external edits, so every surface is quietly
+        // stale until restart.
+        broadcast_event(&tx, Event::reindexed());
+        on_fault(
+            "FloatNotes stopped watching the notes folder. External edits will not \
+             show up until you restart the app."
+                .to_string(),
+        );
     });
     Ok(watcher)
 }
 
-/// Keep only direct-child `.md` files that aren't dotfiles (sidecar, `.tmp-*`)
-/// — dedup by path.
-fn collect_note_paths(dir: &PathBuf, event: notify::Result<notify::Event>, out: &mut Vec<PathBuf>) {
-    let Ok(event) = event else { return };
+/// Keep only direct-child `.md` files that aren't dotfiles (sidecar, `.tmp-*`),
+/// dedup by path. Returns true when the event was an error, i.e. a change
+/// happened that could not be attributed to any path.
+fn collect_note_paths(
+    dir: &PathBuf,
+    event: notify::Result<notify::Event>,
+    out: &mut Vec<PathBuf>,
+) -> bool {
+    let event = match event {
+        Ok(event) => event,
+        Err(e) => {
+            eprintln!("[floatnotes] notes-dir watch error: {e}");
+            return true;
+        }
+    };
     for path in event.paths {
         if path.parent() != Some(dir.as_path()) {
             continue; // .trash/ internals etc.
@@ -543,6 +574,7 @@ fn collect_note_paths(dir: &PathBuf, event: notify::Result<notify::Event>, out: 
             out.push(path);
         }
     }
+    false
 }
 
 #[cfg(test)]
@@ -857,7 +889,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = NoteStore::open(dir.path()).expect("open store");
         let (tx, mut rx) = broadcast::channel(64);
-        let _watcher = spawn_watcher(store.dir().to_path_buf(), tx).expect("watcher");
+        let _watcher = spawn_watcher(store.dir().to_path_buf(), tx, |_| {}).expect("watcher");
         // FSEvents needs a beat to arm before the first write.
         tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -879,6 +911,45 @@ mod tests {
             rx.try_recv(),
             Err(broadcast::error::TryRecvError::Empty)
         ));
+    }
+
+    /// A watcher that stops is the app's quietest failure: every surface keeps
+    /// rendering while external edits stop arriving. Its death has to be
+    /// reported (banner) and told to the clients (reindex), not just end a
+    /// thread.
+    #[tokio::test]
+    async fn a_dead_watcher_reports_a_fault_and_asks_clients_to_resync() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = NoteStore::open(dir.path()).expect("open store");
+        let (tx, mut rx) = broadcast::channel(64);
+        let (fault_tx, fault_rx) = std::sync::mpsc::channel::<String>();
+
+        let watcher = spawn_watcher(store.dir().to_path_buf(), tx, move |message| {
+            let _ = fault_tx.send(message);
+        })
+        .expect("watcher");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // Dropping the watcher is what a real death looks like from the
+        // event-loop's side: the sender goes away and `recv` fails forever.
+        drop(watcher);
+
+        let message = tokio::task::spawn_blocking(move || {
+            fault_rx.recv_timeout(Duration::from_secs(5))
+        })
+        .await
+        .unwrap()
+        .expect("the watch loop must report that it stopped");
+        assert!(
+            message.contains("restart"),
+            "the fault must tell the user what to do: {message}"
+        );
+
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("resync event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "notes-reindexed");
     }
 
     /// Dev-only regression: the Vite HMR WebSocket has to survive the :4949

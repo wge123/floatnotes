@@ -166,7 +166,17 @@ pub fn run() {
             // Notes store + localhost server + watcher (contract: S03).
             let note_store = store::NoteStore::open_default()?;
             let (tx, _rx) = broadcast::channel::<server::Event>(64);
-            let watcher = server::spawn_watcher(note_store.dir().to_path_buf(), tx.clone())?;
+            // A watcher that dies takes live sync with it, so route its death
+            // to the same in-panel banner the server errors use.
+            let watcher_handle = app.app_handle().clone();
+            let watcher = server::spawn_watcher(
+                note_store.dir().to_path_buf(),
+                tx.clone(),
+                move |message| {
+                    eprintln!("[floatnotes] {message}");
+                    let _ = watcher_handle.emit("floatnotes://server-error", message);
+                },
+            )?;
             app.manage(WatcherHandle(std::sync::Mutex::new(watcher)));
             let handle = app.app_handle().clone();
             tauri::async_runtime::spawn(async move {

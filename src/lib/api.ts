@@ -97,11 +97,23 @@ export const api = {
   read: (id: string): Promise<Note> =>
     request(`/api/notes/${encodeURIComponent(id)}`),
 
-  /** `mtime` = the client's last-known disk mtime; 409 → ConflictError. */
-  update: (id: string, content: string, mtime: number): Promise<Note> =>
+  /**
+   * `mtime` = the client's last-known disk mtime; 409 → ConflictError.
+   *
+   * `keepalive` is what makes an unload-time flush actually reach the server:
+   * a normal fetch issued from `pagehide`/`beforeunload` is cancelled with the
+   * document, which silently drops the last edit the user typed.
+   */
+  update: (
+    id: string,
+    content: string,
+    mtime: number,
+    options?: { keepalive?: boolean },
+  ): Promise<Note> =>
     request(`/api/notes/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify({ content, mtime }),
+      keepalive: options?.keepalive,
     }),
 
   remove: (id: string): Promise<void> =>

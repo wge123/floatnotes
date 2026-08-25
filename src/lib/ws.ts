@@ -51,8 +51,11 @@ const IGNORE: SyncAction = { kind: "ignore" };
  *   typing; the next auto-save PUTs a stale mtime and the 409 path resolves
  *   the conflict (autosave.ts — disk wins there, never here).
  * - `note-deleted` for the open note → open the most recent survivor + toast.
- * - `notes-reindexed` → ignore: list surfaces refetch when opened; the open
- *   note's protocol stays mtime-driven.
+ * - `notes-reindexed` → reload the open note when clean. The server only sends
+ *   this when it KNOWS it has lost events (a lagging socket, a watch error, a
+ *   dead watcher), so the mtime protocol has nothing to compare against and
+ *   ignoring it leaves the panel quietly stale. Dirty still yields to the 409
+ *   path, which is the only place unsaved edits are resolved.
  */
 export function decideSyncAction(
   event: SyncEvent,
@@ -69,7 +72,7 @@ export function decideSyncAction(
     case "note-deleted":
       return event.id === open.id ? { kind: "open-most-recent" } : IGNORE;
     case "notes-reindexed":
-      return IGNORE;
+      return open.dirty ? IGNORE : { kind: "reload", id: open.id };
   }
 }
 

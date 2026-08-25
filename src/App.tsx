@@ -21,7 +21,7 @@ import {
   type AppCommand,
   type OverlayEntry,
 } from "./lib/app-keymap";
-import { saveWithConflictReload } from "./lib/autosave";
+import { saveWithConflictReload, type SaveApi } from "./lib/autosave";
 import { toHtml, toPlainText } from "./lib/export";
 import {
   captureFocus,
@@ -52,6 +52,21 @@ const UNDO_TOAST_MS = 5000;
  * promise so the create happens at most once per page load.
  */
 let bootPromise: Promise<Note> | null = null;
+
+/**
+ * The save API used from unload-time flushes. `keepalive` lets the request
+ * outlive the document; without it the browser cancels the PUT and the last
+ * edit is lost with no error anywhere.
+ */
+const unloadApi: SaveApi = {
+  update: (id, content, mtime) =>
+    api.update(id, content, mtime, { keepalive: true }),
+  read: api.read,
+};
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function bootNote(deeplinkId: string | null): Promise<Note> {
   bootPromise ??= (async () => {
@@ -117,6 +132,22 @@ function App() {
   /** Unsaved edits exist (auto-save pending or in flight) — sync policy input. */
   const dirtyRef = useRef(false);
   const saveTimer = useRef<number | undefined>(undefined);
+  /**
+   * The edit waiting on the auto-save debounce, tagged with the note it was
+   * typed into. Keyed by id (not by a note snapshot) so a flush always PUTs
+   * the text under the right note while still using the freshest mtime.
+   */
+  const pendingSave = useRef<{
+    id: string;
+    markdown: string;
+    mtime: number;
+  } | null>(null);
+  /** True once a save failure put its message in the banner, so the next
+   * successful save knows the banner is its to clear. */
+  const saveErrorShown = useRef(false);
+  /** False until the sidecar has actually been read from disk. Persisting
+   * before that writes empty defaults over the real pins/order/zoom. */
+  const sidecarLoaded = useRef(false);
 
   const toastTimer = useRef<number | undefined>(undefined);
   const showToast = useCallback((message: string) => {
@@ -200,18 +231,149 @@ function App() {
     [overlays, openOverlay, closeOverlay],
   );
 
+  /**
+   * A failed save is not a passing status message: the note on disk no longer
+   * matches what the user is looking at. It gets the persistent banner, not a
+   * 3-second toast, and stays there until a save actually succeeds.
+   */
+  const reportSaveFailure = useCallback((message: string) => {
+    saveErrorShown.current = true;
+    setBanner(message);
+  }, []);
+
+  const clearSaveFailure = useCallback(() => {
+    if (!saveErrorShown.current) return;
+    saveErrorShown.current = false;
+    setBanner(null);
+  }, []);
+
+  const flushSave = useCallback(
+    async (id: string, markdown: string, mtime: number, saveApi?: SaveApi) => {
+      try {
+        const outcome = await saveWithConflictReload(
+          id,
+          markdown,
+          mtime,
+          saveApi,
+        );
+        if (outcome.kind === "saved") {
+          clearSaveFailure();
+          // Merge mtime/title only — the user may have typed since the PUT.
+          setNote((n) =>
+            n && n.id === outcome.note.id
+              ? { ...n, mtime: outcome.note.mtime, title: outcome.note.title }
+              : n,
+          );
+          // Clean only if nothing was typed while the PUT was in flight.
+          if (noteRef.current?.id === id && noteRef.current.content === markdown) {
+            dirtyRef.current = false;
+          }
+          return;
+        }
+        // 409: the file changed on disk under us and the disk version wins
+        // (autosave.ts). Applied wholesale that discards whatever the user
+        // typed, so park their text in its own note BEFORE swapping disk in.
+        if (outcome.note.content === markdown) {
+          dirtyRef.current = false;
+          setNote(outcome.note);
+          showToast("reloaded, changed on disk");
+          return;
+        }
+        let copy: Note;
+        try {
+          copy = await api.create(markdown);
+        } catch (error) {
+          // Nothing is swapped in: the editor is now holding the only copy of
+          // this text, which is the safest place to leave it.
+          reportSaveFailure(
+            `“${outcome.note.title}” changed on disk and your version could not be saved (${describe(error)}). Copy your text out before closing FloatNotes.`,
+          );
+          return;
+        }
+        dirtyRef.current = false;
+        setNote(outcome.note);
+        reportSaveFailure(
+          `“${outcome.note.title}” changed on disk. Your unsaved version was kept at ${copy.path}`,
+        );
+      } catch (error) {
+        reportSaveFailure(`save failed: ${describe(error)}`);
+      }
+    },
+    [clearSaveFailure, reportSaveFailure, showToast],
+  );
+
+  /**
+   * Write the debounced edit now, against the note it was typed into. The
+   * entry is taken before the save starts, so two flushes racing (a note
+   * switch and a pagehide in the same tick) can never PUT it twice.
+   */
+  const flushPending = useCallback(
+    (saveApi?: SaveApi) => {
+      window.clearTimeout(saveTimer.current);
+      const pending = pendingSave.current;
+      if (!pending) return;
+      pendingSave.current = null;
+      // Freshest known mtime for that note beats the one captured at
+      // keystroke time, which may be a save older than the one in flight.
+      const open = noteRef.current;
+      const mtime = open?.id === pending.id ? open.mtime : pending.mtime;
+      void flushSave(pending.id, pending.markdown, mtime, saveApi);
+    },
+    [flushSave],
+  );
+
+  const onEdit = useCallback(
+    (markdown: string) => {
+      const open = noteRef.current;
+      if (!open) return;
+      dirtyRef.current = true;
+      pendingSave.current = { id: open.id, markdown, mtime: open.mtime };
+      setNote((n) => (n ? { ...n, content: markdown } : n));
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => flushPending(), AUTOSAVE_MS);
+    },
+    [flushPending],
+  );
+
+  /**
+   * The debounce is the app's one window for losing writing: a hidden tab, a
+   * closed window or a quit inside AUTOSAVE_MS drops the last edit with no
+   * error anywhere. Flush on every lifecycle signal the surface gives us.
+   */
+  useEffect(() => {
+    const flushNow = () => flushPending(unloadApi);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushNow();
+    };
+    window.addEventListener("pagehide", flushNow);
+    window.addEventListener("beforeunload", flushNow);
+    window.addEventListener("blur", flushNow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flushNow);
+      window.removeEventListener("beforeunload", flushNow);
+      window.removeEventListener("blur", flushNow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [flushPending]);
+
   // ------------------------------------------------------------ note flow
   /** Open a note; `record` visits it in ⌘[/⌘] history (default true). */
-  const openNote = useCallback((next: Note, record = true) => {
-    // Switching notes drops any pending auto-save of the OLD note — flushing
-    // it after the switch would PUT the old content under the new note's id.
-    if (noteRef.current?.id !== next.id) {
-      window.clearTimeout(saveTimer.current);
-      dirtyRef.current = false;
-    }
-    setNote(next);
-    if (record) historyRef.current = visit(historyRef.current, next.id);
-  }, []);
+  const openNote = useCallback(
+    (next: Note, record = true) => {
+      // Switching notes used to DROP the pending auto-save of the old note,
+      // so every edit typed in the last AUTOSAVE_MS before a ⌘P switch was
+      // lost without a word. The pending entry carries its own note id, so it
+      // can simply be flushed against that id instead.
+      if (noteRef.current?.id !== next.id) {
+        flushPending();
+        dirtyRef.current = false;
+      }
+      setNote(next);
+      if (record) historyRef.current = visit(historyRef.current, next.id);
+    },
+    [flushPending],
+  );
 
   const openNoteById = useCallback(
     async (id: string, record = true) => {
@@ -245,6 +407,7 @@ function App() {
       .sidecarLoad()
       .then((loaded) => {
         if (cancelled) return;
+        sidecarLoaded.current = true;
         setSidecar(loaded);
         applyZoom(loaded.zoom);
       })
@@ -268,56 +431,16 @@ function App() {
       .catch((error: unknown) => showToast(`login-item state: ${error}`));
   }, [showToast]);
 
-  const flushSave = useCallback(
-    async (markdown: string) => {
-      const currentNote = noteRef.current;
-      if (!currentNote) return;
-      try {
-        const outcome = await saveWithConflictReload(
-          currentNote.id,
-          markdown,
-          currentNote.mtime,
-        );
-        if (outcome.kind === "saved") {
-          // Merge mtime/title only — the user may have typed since the PUT.
-          setNote((n) =>
-            n && n.id === outcome.note.id
-              ? { ...n, mtime: outcome.note.mtime, title: outcome.note.title }
-              : n,
-          );
-          // Clean only if nothing was typed while the PUT was in flight.
-          if (noteRef.current?.content === markdown) dirtyRef.current = false;
-        } else {
-          // 409 → the disk version wins wholesale.
-          dirtyRef.current = false;
-          setNote(outcome.note);
-          showToast("reloaded — changed on disk");
-        }
-      } catch (error) {
-        showToast(
-          `save failed: ${error instanceof Error ? error.message : error}`,
-        );
-      }
-    },
-    [showToast],
-  );
-
-  const onEdit = useCallback(
-    (markdown: string) => {
-      dirtyRef.current = true;
-      setNote((n) => (n ? { ...n, content: markdown } : n));
-      window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(
-        () => void flushSave(markdown),
-        AUTOSAVE_MS,
-      );
-    },
-    [flushSave],
-  );
-
   // --------------------------------------------------------------- pins
   const persistSidecar = useCallback(
     (next: Sidecar) => {
+      // The sidecar is a whole-value PUT, so writing it before the load
+      // succeeded overwrites the real pins/order/zoom on disk with the empty
+      // defaults this component starts with. Refuse, visibly, instead.
+      if (!sidecarLoaded.current) {
+        showToast("pins unavailable, not saved");
+        return;
+      }
       setSidecar(next);
       api.sidecarSave(next).catch((error: unknown) => {
         showToast(`could not save pins: ${error}`);

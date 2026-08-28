@@ -21,6 +21,22 @@ else
 fi
 url="http://${host}:${port}"
 
+# The server on ${port} lives inside FloatNotes.app; if nothing is listening,
+# the app is not running. Start it and wait for the port instead of opening a
+# browser onto a "refused to connect" page.
+if ! nc -z 127.0.0.1 "${port}" >/dev/null 2>&1; then
+  echo "notes-open: nothing on :${port}, launching FloatNotes.app" >&2
+  open -g -a FloatNotes
+  for _ in $(seq 1 40); do
+    nc -z 127.0.0.1 "${port}" >/dev/null 2>&1 && break
+    sleep 0.25
+  done
+  if ! nc -z 127.0.0.1 "${port}" >/dev/null 2>&1; then
+    echo "notes-open: FloatNotes did not come up on :${port} within 10s" >&2
+    exit 1
+  fi
+fi
+
 # Gate: no cmux socket (background job, launchd, cmux not running) → plain open.
 if ! cmux identify >/dev/null 2>&1; then
   exec open "$url"

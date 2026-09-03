@@ -280,3 +280,19 @@ fn build_popover(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     });
     Ok(window)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::tray_title;
+
+    #[test]
+    fn tray_title_keeps_short_titles_and_ellipsizes_long_ones() {
+        assert_eq!(tray_title("Groceries"), "Groceries");
+        assert_eq!(tray_title("  "), "Untitled");
+        let exact = "b".repeat(28);
+        assert_eq!(tray_title(&exact), exact);
+        let shown = tray_title(&"a".repeat(40));
+        assert_eq!(shown.chars().count(), 29);
+        assert!(shown.ends_with('…'));
+    }
+}

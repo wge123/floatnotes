@@ -647,13 +647,14 @@ mod tests {
             order: vec!["a".into(), "b".into()],
             zoom: Some(1.2),
             esc_behavior: Some("unfocus".into()),
-            menu_bar_note: None,
+            menu_bar_note: Some("groceries-ab12cd".into()),
         };
         store.sidecar_save(&sidecar).expect("save");
         let loaded = store.sidecar_load().expect("load");
         assert_eq!(loaded.pins, vec!["a"]);
         assert_eq!(loaded.order.len(), 2);
         assert_eq!(loaded.esc_behavior.as_deref(), Some("unfocus"));
+        assert_eq!(loaded.menu_bar_note.as_deref(), Some("groceries-ab12cd"));
         std::fs::write(store.dir().join(SIDECAR_NAME), "{not json").unwrap();
         let recovered = store.sidecar_load().expect("corrupt json still loads defaults");
         assert!(recovered.pins.is_empty());

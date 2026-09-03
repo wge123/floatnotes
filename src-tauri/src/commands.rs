@@ -1,7 +1,8 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, WebviewWindow};
 use tauri_nspanel::ManagerExt;
 
-#[cfg(target_os = "macos")]
+use crate::menubar;
+
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri_nspanel::objc2_app_kit::{NSWindow, NSWindowSharingType};
@@ -13,10 +14,12 @@ pub fn show_panel(handle: AppHandle) {
     crate::show(&handle);
 }
 
+/// Hides whichever panel invoked it: the main panel or the menubar popover
+/// (both are nonactivating panels; Esc/⌘W/the red light mean "this one").
 #[tauri::command]
-pub fn hide_panel(handle: AppHandle) {
+pub fn hide_panel(handle: AppHandle, window: WebviewWindow) {
     let panel = handle
-        .get_webview_panel(PANEL_LABEL)
+        .get_webview_panel(window.label())
         .expect("panel not initialized");
     panel.hide();
 }
@@ -29,11 +32,25 @@ pub fn toggle_panel(handle: AppHandle) {
 /// Esc "unfocus" mode (step 09): keep the panel visible but resign key
 /// status, handing the keyboard back to the previously active app.
 #[tauri::command]
-pub fn unfocus_panel(handle: AppHandle) {
+pub fn unfocus_panel(handle: AppHandle, window: WebviewWindow) {
     let panel = handle
-        .get_webview_panel(PANEL_LABEL)
+        .get_webview_panel(window.label())
         .expect("panel not initialized");
     panel.resign_key_window();
+}
+
+/// Menubar note (ADR 0015). The popover asks this at boot to know which note
+/// to open; the sidecar is the persisted truth and the frontend writes it.
+#[tauri::command]
+pub fn get_menubar_note(handle: AppHandle) -> Option<String> {
+    handle.state::<menubar::MenuBar>().note()
+}
+
+/// Pin `id` to the menubar (tray title + popover), or clear with `None`.
+/// Called by the frontend AFTER it persisted the sidecar.
+#[tauri::command]
+pub fn set_menubar_note(handle: AppHandle, id: Option<String>) -> Result<(), String> {
+    menubar::apply(&handle, id.as_deref())
 }
 
 #[tauri::command]

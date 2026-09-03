@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 
 import ActionPanel, { type Action } from "./components/ActionPanel";
@@ -87,6 +88,11 @@ function bootNote(deeplinkId: string | null): Promise<Note> {
 type OverlayId = "switcher" | "action-panel" | "find";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
+/**
+ * Which Tauri window hosts this page (ADR 0015). The menubar popover runs the
+ * same app but boots on the pinned note, and follows it when the pin moves.
+ */
+const isMenuBarPopover = inTauri && getCurrentWindow().label === "menubar";
 
 /**
  * App shell (steps 05–06): one visible note wired to the localhost server,
@@ -387,18 +393,24 @@ function App() {
   );
 
   // Boot: ?note=<id> deeplink when present, else most-recent note, else the
-  // empty "Untitled" note (ADR 0002).
+  // empty "Untitled" note (ADR 0002). The menubar popover asks Rust for the
+  // pinned note instead: its URL is the bare app, the pin lives in the tray.
   useEffect(() => {
     let cancelled = false;
-    const requested = new URLSearchParams(window.location.search).get("note");
-    bootNote(requested)
-      .then((booted) => {
-        if (cancelled) return;
-        openNote(booted);
-        if (requested && booted.id !== requested) {
-          showToast("note not found — opened most recent");
-        }
-      })
+    const deeplink = new URLSearchParams(window.location.search).get("note");
+    const requestedId: Promise<string | null> = isMenuBarPopover
+      ? invoke<string | null>("get_menubar_note")
+      : Promise.resolve(deeplink);
+    requestedId
+      .then((requested) =>
+        bootNote(requested).then((booted) => {
+          if (cancelled) return;
+          openNote(booted);
+          if (requested && booted.id !== requested) {
+            showToast("note not found — opened most recent");
+          }
+        }),
+      )
       .catch((error: unknown) => {
         // Visible failure over a silently empty panel.
         if (!cancelled) setBanner(`FloatNotes could not load notes: ${error}`);
@@ -433,18 +445,19 @@ function App() {
 
   // --------------------------------------------------------------- pins
   const persistSidecar = useCallback(
-    (next: Sidecar) => {
+    (next: Sidecar): boolean => {
       // The sidecar is a whole-value PUT, so writing it before the load
       // succeeded overwrites the real pins/order/zoom on disk with the empty
       // defaults this component starts with. Refuse, visibly, instead.
       if (!sidecarLoaded.current) {
         showToast("pins unavailable, not saved");
-        return;
+        return false;
       }
       setSidecar(next);
       api.sidecarSave(next).catch((error: unknown) => {
         showToast(`could not save pins: ${error}`);
       });
+      return true;
     },
     [showToast],
   );
@@ -680,6 +693,8 @@ function App() {
   );
 
   // Rust-side warnings surface as an in-panel banner (was panel-keys.ts).
+  // The popover also follows the pin: re-pinning from the main panel while
+  // the popover is alive swaps its note in place.
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     const unlistens = Promise.all([
@@ -689,11 +704,18 @@ function App() {
       listen<string>("floatnotes://server-error", ({ payload }) =>
         setBanner(payload),
       ),
+      ...(isMenuBarPopover
+        ? [
+            listen<string>("floatnotes://menubar-note", ({ payload }) => {
+              if (noteRef.current?.id !== payload) void openNoteById(payload);
+            }),
+          ]
+        : []),
     ]);
     return () => {
       void unlistens.then((fns) => fns.forEach((unlisten) => unlisten()));
     };
-  }, []);
+  }, [openNoteById]);
 
   // ⌘K actions — declared here, filtered/run by ActionPanel.
   const actions: Action[] = [
@@ -788,6 +810,31 @@ function App() {
     // Panel-only actions (step 09) — meaningless in the plain browser surface.
     ...(inTauri
       ? ([
+          {
+            id: "menubar",
+            label:
+              note && sidecar.menuBarNote === note.id
+                ? "Unpin from Menu Bar"
+                : "Pin to Menu Bar",
+            run: () => {
+              const n = noteRef.current;
+              if (!n) return;
+              const prev = sidecarRef.current;
+              const next = prev.menuBarNote === n.id ? null : n.id;
+              // Sidecar first (the persisted truth), tray second: Rust never
+              // writes the sidecar, so a refused write must not move the tray.
+              if (!persistSidecar({ ...prev, menuBarNote: next })) return;
+              invoke("set_menubar_note", { id: next })
+                .then(() =>
+                  showToast(
+                    next ? "pinned to menu bar" : "unpinned from menu bar",
+                  ),
+                )
+                .catch((error: unknown) =>
+                  showToast(`menu bar pin failed: ${error}`),
+                );
+            },
+          },
           {
             id: "screen-share",
             label: screenShareVisible

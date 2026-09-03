@@ -30,6 +30,8 @@ export interface Sidecar {
   zoom: number | null;
   /** Absent on older sidecars — treat as "hide". */
   escBehavior?: EscBehavior;
+  /** Id of the note pinned to the menubar (ADR 0015); absent/null = none. */
+  menuBarNote?: string | null;
 }
 
 /**

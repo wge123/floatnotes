@@ -29,6 +29,14 @@ converts it to styled content and the raw markers disappear from the editor
 view, existing only in the `.md` file on disk. The opposite behavior
 (reveal-on-caret) is post-v1. See ADR 0005.
 
+### Menubar note
+
+The one note pinned to the menubar (sidecar `menuBarNote`, ADR 0015). Its
+title sits next to the tray icon; a left-click drops a **popover** (a second
+window, label `menubar`, running the same app) with that note under the icon.
+The popover dismisses when it loses key status; the menu moves to right-click
+while a note is pinned. Pin and unpin from ⌘K.
+
 ### Note
 
 One plain UTF-8 `.md` file in `~/Notes` (override `FLOATNOTES_DIR`). The file
@@ -54,7 +62,7 @@ as it did. The server now runs an origin allowlist instead (`server.rs`
 
 `~/Notes/.floatnotes.json` — the single file holding app metadata that must
 not live inside notes: pin state, note order, zoom level, Esc behavior
-(hide vs unfocus). Never contains note content.
+(hide vs unfocus), the menubar note. Never contains note content.
 
 ### Trash
 

@@ -79,6 +79,9 @@ the FloatNotes project.
 - "Hide from Screen Share" makes the panel invisible in a screen recording
 - Launch at login (SMAppService) after enabling + reboot
 - cmux: ⌘⌥N action, `note` CLI capture while app closed → lands in inbox
+- Menubar note (ADR 0015): ⌘K "Pin to Menu Bar" puts the title next to the
+  tray icon; left-click drops the popover under it, a click elsewhere dismisses
+  it, right-click still shows the menu; the pin survives a relaunch
 
 Added by the 2026-07-30 UI/UX audit — surfaces a browser can never reach
 (`audit-output/REPORT.md` Appendix A):

@@ -8,8 +8,8 @@
 //! - Writes are atomic (temp file + rename into place).
 //! - Delete never unlinks (ADR 0004): the file is renamed into `.trash/`,
 //!   timestamp suffix on collision.
-//! - Pin/order/zoom metadata lives in the sidecar `.floatnotes.json`, never
-//!   inside notes.
+//! - Pin/order/zoom/menubar-note metadata lives in the sidecar
+//!   `.floatnotes.json`, never inside notes.
 
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -55,6 +55,9 @@ pub struct Sidecar {
     /// overlays open (step 09). Free string: the client owns the vocabulary.
     #[serde(default, rename = "escBehavior", skip_serializing_if = "Option::is_none")]
     pub esc_behavior: Option<String>,
+    /// Id of the note pinned to the menubar (ADR 0015), if any.
+    #[serde(default, rename = "menuBarNote", skip_serializing_if = "Option::is_none")]
+    pub menu_bar_note: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -644,6 +647,7 @@ mod tests {
             order: vec!["a".into(), "b".into()],
             zoom: Some(1.2),
             esc_behavior: Some("unfocus".into()),
+            menu_bar_note: None,
         };
         store.sidecar_save(&sidecar).expect("save");
         let loaded = store.sidecar_load().expect("load");

@@ -10,6 +10,7 @@ use tokio::sync::broadcast;
 use window::WebviewWindowExt;
 
 mod commands;
+mod menubar;
 pub mod server;
 pub mod store;
 mod window;
@@ -45,6 +46,8 @@ pub fn toggle(app: &AppHandle) {
 /// Menubar icon: the permanent way back to the panel. The hotkey is a
 /// registration that can fail and the panel itself can be hidden, so without
 /// this an Accessory-policy app has no discoverable entry point at all.
+/// With a note pinned to the menubar (menubar.rs) left-click becomes that
+/// note's popover and the menu moves to right-click.
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let show_item = MenuItem::with_id(app, "show", "Show panel", true, Some("Alt+N"))?;
     let hide_item = MenuItem::with_id(app, "hide", "Hide panel", true, None::<&str>)?;
@@ -59,7 +62,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
 
-    TrayIconBuilder::with_id("floatnotes-tray")
+    TrayIconBuilder::with_id(menubar::TRAY_ID)
         .icon(app.default_window_icon().cloned().expect("bundled icon"))
         // NOT a template: the bundled icon is the full-colour app icon, and
         // template rendering collapses it to a filled silhouette that reads as
@@ -70,6 +73,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         // Left-click is the menu, not a toggle: a toggle would make the only
         // always-available control the one that can hide the panel by accident.
         .show_menu_on_left_click(true)
+        .on_tray_icon_event(menubar::on_tray_event)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => show(app),
             "hide" => {
@@ -130,7 +134,9 @@ pub fn run() {
             commands::set_screen_share_visible,
             commands::get_screen_share_visible,
             commands::set_login_item,
-            commands::get_login_item
+            commands::get_login_item,
+            commands::get_menubar_note,
+            commands::set_menubar_note
         ])
         .setup(|app| {
             // No Dock icon, no app switcher entry — the panel is the app.
@@ -166,6 +172,14 @@ pub fn run() {
             // Notes store + localhost server + watcher (contract: S03).
             let note_store = store::NoteStore::open_default()?;
             let (tx, _rx) = broadcast::channel::<server::Event>(64);
+
+            // Menubar note (ADR 0015): the store is shared with the tray so
+            // titles resolve from disk; the pin itself is restored from the
+            // sidecar and then follows the note through the broadcast.
+            app.manage(note_store.clone());
+            app.manage(menubar::MenuBar::default());
+            menubar::restore(app.app_handle(), &note_store);
+            menubar::follow_title(app.app_handle().clone(), &tx);
             // A watcher that dies takes live sync with it, so route its death
             // to the same in-panel banner the server errors use.
             let watcher_handle = app.app_handle().clone();

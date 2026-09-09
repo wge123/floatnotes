@@ -43,3 +43,6 @@ skills-lock.json
 
 # cmux cockpit: machine-local config, scripts and scratch, never shared
 .cmux/
+
+# Audit and scan output — never commit (contains environment dumps)
+audit-output/

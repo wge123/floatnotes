@@ -25,3 +25,17 @@ Floating markdown scratch-notes app for macOS (free Raycast-Notes-style replacem
 - `bun run tauri dev` — run the app (Tauri shell + Vite on 1420 + the in-app axum server on 4949)
 - `bun run build` — typecheck + bundle frontend
 - `cargo check --manifest-path src-tauri/Cargo.toml` — fast Rust check
+
+## Agent skills
+
+### Issue tracker
+
+Second-brain store, area `FloatNotes`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five roles, applied as store tags. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `docs/glossary.md` + `docs/adr/`. See `docs/agents/domain.md`.

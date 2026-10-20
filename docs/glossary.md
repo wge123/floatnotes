@@ -8,12 +8,26 @@ handler at compile time — debug proxies to Vite, release serves `dist/` from
 disk — and the URL alone reveals neither, so this check is a hard precondition
 before any audit measurement. See ADR 0008.
 
+### Explorer
+
+The Finder-style view of the notes directory: a folder tree beside a grid of
+the current folder, shown as Icons or as Preview cards. It shows notes and
+folders only.
+_Avoid_: file browser, file tree
+
 ### Evidence tagging
 
 The rule that every audit finding carries its source: `measured` (a value a
 deterministic tool produced — a computed contrast ratio, a rendered width, a
 missing DOM attribute) or `model-judged` (a reviewer's opinion). Model-judged
 findings never gate a verdict on their own. See ADR 0006.
+
+### Folder
+
+A directory under the notes directory that holds at least one note, directly
+or further down. A directory with no notes anywhere below it is not a folder
+and never appears; nor does any dot-directory (`.trash`).
+_Avoid_: directory (for the user-facing concept)
 
 ### Keyboard reachability
 
@@ -39,10 +53,12 @@ while a note is pinned. Pin and unpin from ⌘K.
 
 ### Note
 
-One plain UTF-8 `.md` file in `~/Notes` (override `FLOATNOTES_DIR`). The file
-IS the note — no frontmatter, no database row. Title = first non-empty line
-(leading `#` stripped); filename = title slug + short random suffix, stable
-after creation.
+One plain UTF-8 `.md` file anywhere under `~/Notes` (override
+`FLOATNOTES_DIR`), at any folder depth. The file IS the note — no frontmatter,
+no database row. Title = first non-empty line (leading `#` stripped). A note's
+id is its path under the notes directory without `.md`
+(`research/findings`); a top-level note's id is just its filename slug
+(ADR 0016). Files that are not `.md` are not notes.
 
 ### Private Network Access
 
@@ -67,7 +83,9 @@ not live inside notes: pin state, note order, zoom level, Esc behavior
 ### Trash
 
 `~/Notes/.trash/` — where DELETE renames note files instead of unlinking
-them. Undo renames back; post-toast recovery is manual. Hidden from the
+them. A note deleted from a folder keeps that folder path inside the trash
+(`.trash/work/notes.md`), so it remembers where it came from; the emptied
+folder stays on disk. Undo renames back; post-toast recovery is manual. Hidden from the
 watcher and the note index like all dotfiles. No auto-expiry. See ADR 0004.
 
 ### Undo toast

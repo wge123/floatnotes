@@ -707,4 +707,35 @@ describe("Explorer: filter", () => {
     expect(onOpen).not.toHaveBeenCalled();
     expect(selected()).toEqual(["Alpha doc"]);
   });
+
+  describe("when the note list is refreshed while open", () => {
+    it("keeps the current folder and selection where they still exist", () => {
+      render("research/alpha");
+      expect(crumbs()).toEqual(["Notes", "research"]);
+
+      render("research/alpha", [...NOTES, note("research/new", "Brand new", 10)]);
+
+      expect(crumbs()).toEqual(["Notes", "research"]);
+      expect(selected()).toEqual(["Alpha doc"]);
+      expect(labels()).toContain("Brand new");
+    });
+
+    it("falls back to the nearest surviving ancestor when the folder vanishes", () => {
+      render("research/deep/one");
+      expect(crumbs()).toEqual(["Notes", "research", "deep"]);
+
+      render(
+        "research/deep/one",
+        NOTES.filter((n) => !n.id.startsWith("research/deep/")),
+      );
+
+      expect(crumbs()).toEqual(["Notes", "research"]);
+      expect(labels()).toContain("Alpha doc");
+    });
+
+    it("does not move while the list is still loading", () => {
+      render("research/alpha", null);
+      expect(crumbs()).toEqual(["Notes", "research"]);
+    });
+  });
 });

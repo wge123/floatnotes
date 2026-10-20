@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api, type Note } from "../lib/api";
+import { api, type NoteMeta } from "../lib/api";
 import { trapTab } from "../lib/focus-trap";
 import { rankNotes } from "../lib/fuzzy";
 
 export interface NoteSwitcherProps {
   pins: readonly string[];
   currentNoteId: string | null;
-  onOpen: (note: Note) => void;
+  onOpen: (note: NoteMeta) => void;
   /** Delete key on a row — App owns the DELETE call + undo toast. */
-  onDelete: (note: Note) => void;
+  onDelete: (note: NoteMeta) => void;
   onClose: () => void;
 }
 
 /**
- * ⌘P note switcher (step 06): fuzzy filter over title + content, pinned
+ * ⌘P note switcher (step 06): fuzzy filter over folder + title + snippet, pinned
  * notes on top, ↑/↓ + Enter opens, Delete deletes (with app-level undo).
  * Esc is handled by the app-level overlay stack.
  *
- * Contents are fetched fresh on every open — the switcher is transient and
- * notes can change under us (file watcher), so no caching.
+ * The list is fetched fresh on every open — the switcher is transient and
+ * notes can change under us (file watcher), so no caching. Rows come from the
+ * list alone (folder + snippet); no note content is read.
  */
 export default function NoteSwitcher({
   pins,
@@ -29,7 +30,7 @@ export default function NoteSwitcher({
   onClose,
 }: NoteSwitcherProps) {
   const [query, setQuery] = useState("");
-  const [notes, setNotes] = useState<Note[] | null>(null);
+  const [notes, setNotes] = useState<NoteMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,8 +41,7 @@ export default function NoteSwitcher({
     let cancelled = false;
     (async () => {
       const metas = await api.list();
-      const loaded = await Promise.all(metas.map((m) => api.read(m.id)));
-      if (!cancelled) setNotes(loaded);
+      if (!cancelled) setNotes(metas);
     })().catch((e: unknown) => {
       if (!cancelled) setError(`could not load notes: ${e}`);
     });
@@ -51,7 +51,14 @@ export default function NoteSwitcher({
   }, []);
 
   const ranked = useMemo(
-    () => (notes ? rankNotes(query, notes, pins) : []),
+    () =>
+      notes
+        ? rankNotes(
+            query,
+            notes.map((n) => ({ ...n, content: n.snippet })),
+            pins,
+          )
+        : [],
     [notes, query, pins],
   );
 
@@ -128,6 +135,9 @@ export default function NoteSwitcher({
               >
                 {pinned && <span aria-label="pinned">📌</span>}
                 <span className="truncate">{note.title}</span>
+                {note.folder && (
+                  <span className="truncate text-xs text-gray-600">{note.folder}</span>
+                )}
                 {note.id === currentNoteId && (
                   <span
                     // gray-600, not gray-500: rides the row, and the selected

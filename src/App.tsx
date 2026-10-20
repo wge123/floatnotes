@@ -509,7 +509,7 @@ function App() {
   const locallyDeleted = useRef(new Set<string>());
   const undoTimer = useRef<number | undefined>(undefined);
   const deleteWithUndo = useCallback(
-    async (target: Note) => {
+    async (target: Pick<Note, "id" | "title">) => {
       // Mark BEFORE the DELETE: the server broadcasts before it responds, so
       // the ws echo can beat the HTTP response.
       locallyDeleted.current.add(target.id);
@@ -948,7 +948,7 @@ function App() {
           currentNoteId={note?.id ?? null}
           onOpen={(picked) => {
             closeOverlay("switcher");
-            openNote(picked);
+            void openNoteById(picked.id);
           }}
           onDelete={(target) => void deleteWithUndo(target)}
           onClose={() => closeOverlay("switcher")}

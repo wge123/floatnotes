@@ -11,9 +11,13 @@ export interface NoteMeta {
   title: string;
   /** Unix millis of the file on disk — echo it back on PUT. */
   mtime: number;
+  /** The id's directory part (`research/deep`); empty at the top level. */
+  folder: string;
+  /** First few non-empty lines after the title, bounded (server-derived). */
+  snippet: string;
 }
 
-export interface Note extends NoteMeta {
+export interface Note extends Omit<NoteMeta, "folder" | "snippet"> {
   content: string;
   /** Absolute path of the `.md` file on disk (server-owned; see store.rs). */
   path: string;

@@ -11,6 +11,8 @@ export interface Searchable {
   id: string;
   title: string;
   content: string;
+  /** Folder path of a nested note (empty/absent at the top level). */
+  folder?: string;
 }
 
 const CONSECUTIVE_BONUS = 8;
@@ -74,7 +76,11 @@ export function rankNotes<T extends Searchable>(
     if (query.trim() === "") {
       score = 0;
     } else {
-      const titleScore = fuzzyScore(query, note.title);
+      // The folder path counts as part of the title: "research/Findings".
+      const titleScore = fuzzyScore(
+        query,
+        note.folder ? `${note.folder}/${note.title}` : note.title,
+      );
       const contentScore = fuzzyScore(query, note.content);
       score =
         titleScore !== null

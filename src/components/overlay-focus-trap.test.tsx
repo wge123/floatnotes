@@ -16,7 +16,7 @@ const notes: Note[] = [
 ];
 vi.mock("../lib/api", () => ({
   api: {
-    list: () => Promise.resolve(notes.map(({ id, title, mtime }) => ({ id, title, mtime }))),
+    list: () => Promise.resolve(notes.map(({ id, title, mtime }) => ({ id, title, mtime, folder: "", snippet: "" }))),
     read: (id: string) => Promise.resolve(notes.find((n) => n.id === id)),
   },
 }));

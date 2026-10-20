@@ -1216,4 +1216,74 @@ mod tests {
         assert_eq!(status, StatusCode::NO_CONTENT);
         assert!(tmp.path().join(".trash/plain-abc123.md").is_file());
     }
+
+    #[tokio::test]
+    async fn deleting_a_nested_note_trashes_it_under_its_folder_and_leaves_the_folder() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/deep/plan.md", "# Plan");
+        write_note(tmp.path(), "work/deep/diagram.png", "png bytes");
+
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(!tmp.path().join("work/deep/plan.md").exists());
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join(".trash/work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+        // FloatNotes never deletes folders; non-note files stay untouched.
+        assert!(tmp.path().join("work/deep").is_dir());
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/diagram.png")).unwrap(),
+            "png bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn restoring_a_nested_note_puts_it_back_and_recreates_a_removed_folder() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/deep/plan.md", "# Plan");
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let (status, note) = call(&app, "POST", "/api/notes/work%2Fdeep%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(note["id"], "work/deep/plan");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+        assert!(!tmp.path().join(".trash/work/deep/plan.md").exists());
+
+        // Folder removed externally between delete and undo.
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        std::fs::remove_dir_all(tmp.path().join("work")).unwrap();
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fdeep%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+    }
+
+    #[tokio::test]
+    async fn nested_trash_collisions_get_a_suffix_and_restore_picks_the_newest() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/plan.md", "# First");
+        call(&app, "DELETE", "/api/notes/work%2Fplan", None).await;
+        write_note(tmp.path(), "work/plan.md", "# Second");
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let entries = std::fs::read_dir(tmp.path().join(".trash/work")).unwrap().count();
+        assert_eq!(entries, 2, "collision must not overwrite the first trashed copy");
+
+        // The exact name restores first, the suffixed copy on the next undo.
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(std::fs::read_to_string(tmp.path().join("work/plan.md")).unwrap(), "# First");
+        std::fs::remove_file(tmp.path().join("work/plan.md")).unwrap();
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(std::fs::read_to_string(tmp.path().join("work/plan.md")).unwrap(), "# Second");
+    }
 }

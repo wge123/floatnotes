@@ -493,8 +493,9 @@ pub fn spawn_watcher(
     let mut watcher = notify::recommended_watcher(move |res| {
         let _ = raw_tx.send(res);
     })?;
-    // NonRecursive: events inside .trash/ never reach us.
-    watcher.watch(&dir, RecursiveMode::NonRecursive)?;
+    // Recursive (ADR 0016); dot-paths such as .trash/ are filtered in
+    // `collect_note_paths`.
+    watcher.watch(&dir, RecursiveMode::Recursive)?;
 
     std::thread::spawn(move || {
         while let Ok(first) = raw_rx.recv() {
@@ -516,8 +517,8 @@ pub fn spawn_watcher(
                 }
             }
             for path in paths {
-                let id = match path.file_stem().and_then(|s| s.to_str()) {
-                    Some(stem) => stem.to_string(),
+                let id = match note_id(&dir, &path) {
+                    Some(id) => id,
                     None => continue,
                 };
                 let event = match file_mtime(&path) {
@@ -545,9 +546,10 @@ pub fn spawn_watcher(
     Ok(watcher)
 }
 
-/// Keep only direct-child `.md` files that aren't dotfiles (sidecar, `.tmp-*`),
-/// dedup by path. Returns true when the event was an error, i.e. a change
-/// happened that could not be attributed to any path.
+/// Keep only `.md` files at any depth with no dot-prefixed component below the
+/// notes dir (sidecar, `.tmp-*`, `.trash/`), dedup by path. Returns true when
+/// the event was an error, i.e. a change happened that could not be attributed
+/// to any path.
 fn collect_note_paths(
     dir: &PathBuf,
     event: notify::Result<notify::Event>,
@@ -561,13 +563,7 @@ fn collect_note_paths(
         }
     };
     for path in event.paths {
-        if path.parent() != Some(dir.as_path()) {
-            continue; // .trash/ internals etc.
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if name.starts_with('.') || !name.ends_with(".md") {
+        if note_id(dir, &path).is_none() {
             continue;
         }
         if !out.contains(&path) {
@@ -575,6 +571,30 @@ fn collect_note_paths(
         }
     }
     false
+}
+
+/// The nested note id (`folder/name`, no `.md`) for a path under the notes
+/// dir, or None for anything that is not a visible note.
+fn note_id(dir: &std::path::Path, path: &std::path::Path) -> Option<String> {
+    let rel = path.strip_prefix(dir).ok()?;
+    let mut parts: Vec<&str> = Vec::new();
+    for c in rel.components() {
+        let part = match c {
+            std::path::Component::Normal(p) => p.to_str()?,
+            _ => return None,
+        };
+        if part.starts_with('.') {
+            return None;
+        }
+        parts.push(part);
+    }
+    let last = parts.pop()?;
+    let stem = last.strip_suffix(".md")?;
+    if stem.is_empty() {
+        return None;
+    }
+    parts.push(stem);
+    Some(parts.join("/"))
 }
 
 #[cfg(test)]
@@ -913,6 +933,50 @@ mod tests {
         ));
     }
 
+    /// Notes live in folders (ADR 0016): an external edit anywhere under the
+    /// notes dir broadcasts with the nested id, while dot-paths at any depth
+    /// stay silent.
+    #[tokio::test]
+    async fn watcher_covers_subfolders_with_nested_ids_and_skips_dot_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = NoteStore::open(dir.path()).expect("open store");
+        std::fs::create_dir_all(store.dir().join("research/deep")).unwrap();
+        std::fs::create_dir_all(store.dir().join(".trash/old")).unwrap();
+        std::fs::create_dir_all(store.dir().join("research/.hidden")).unwrap();
+        let (tx, mut rx) = broadcast::channel(64);
+        let _watcher = spawn_watcher(store.dir().to_path_buf(), tx, |_| {}).expect("watcher");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // Silent: trash internals, a dot-folder, a dotfile at depth.
+        std::fs::write(store.dir().join(".trash/old/gone.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/.hidden/h.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/.tmp-abc.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/deep/note.txt"), "x").unwrap();
+        // Loud: a nested note, then a top-level one.
+        std::fs::write(store.dir().join("research/deep/findings.md"), "# F").unwrap();
+
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("nested watcher event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "note-changed");
+        assert_eq!(event.id, "research/deep/findings");
+        assert!(event.mtime.is_some());
+
+        std::fs::remove_file(store.dir().join("research/deep/findings.md")).unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("nested delete event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "note-deleted");
+        assert_eq!(event.id, "research/deep/findings");
+
+        assert!(matches!(
+            rx.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+    }
+
     /// A watcher that stops is the app's quietest failure: every surface keeps
     /// rendering while external edits stop arriving. Its death has to be
     /// reported (banner) and told to the clients (reindex), not just end a
@@ -1215,5 +1279,75 @@ mod tests {
         let (status, _) = call(&app, "DELETE", "/api/notes/plain-abc123", None).await;
         assert_eq!(status, StatusCode::NO_CONTENT);
         assert!(tmp.path().join(".trash/plain-abc123.md").is_file());
+    }
+
+    #[tokio::test]
+    async fn deleting_a_nested_note_trashes_it_under_its_folder_and_leaves_the_folder() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/deep/plan.md", "# Plan");
+        write_note(tmp.path(), "work/deep/diagram.png", "png bytes");
+
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(!tmp.path().join("work/deep/plan.md").exists());
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join(".trash/work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+        // FloatNotes never deletes folders; non-note files stay untouched.
+        assert!(tmp.path().join("work/deep").is_dir());
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/diagram.png")).unwrap(),
+            "png bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn restoring_a_nested_note_puts_it_back_and_recreates_a_removed_folder() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/deep/plan.md", "# Plan");
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let (status, note) = call(&app, "POST", "/api/notes/work%2Fdeep%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(note["id"], "work/deep/plan");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+        assert!(!tmp.path().join(".trash/work/deep/plan.md").exists());
+
+        // Folder removed externally between delete and undo.
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fdeep%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        std::fs::remove_dir_all(tmp.path().join("work")).unwrap();
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fdeep%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("work/deep/plan.md")).unwrap(),
+            "# Plan"
+        );
+    }
+
+    #[tokio::test]
+    async fn nested_trash_collisions_get_a_suffix_and_restore_picks_the_newest() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/plan.md", "# First");
+        call(&app, "DELETE", "/api/notes/work%2Fplan", None).await;
+        write_note(tmp.path(), "work/plan.md", "# Second");
+        let (status, _) = call(&app, "DELETE", "/api/notes/work%2Fplan", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let entries = std::fs::read_dir(tmp.path().join(".trash/work")).unwrap().count();
+        assert_eq!(entries, 2, "collision must not overwrite the first trashed copy");
+
+        // The exact name restores first, the suffixed copy on the next undo.
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(std::fs::read_to_string(tmp.path().join("work/plan.md")).unwrap(), "# First");
+        std::fs::remove_file(tmp.path().join("work/plan.md")).unwrap();
+        let (status, _) = call(&app, "POST", "/api/notes/work%2Fplan/restore", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(std::fs::read_to_string(tmp.path().join("work/plan.md")).unwrap(), "# Second");
     }
 }

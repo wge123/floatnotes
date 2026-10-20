@@ -775,4 +775,19 @@ mod tests {
         let recovered = store.sidecar_load().expect("corrupt json still loads defaults");
         assert!(recovered.pins.is_empty());
     }
+
+    #[test]
+    fn a_bad_or_symlinked_folder_is_a_folder_error_and_a_bad_id_an_id_error() {
+        let (tmp, store) = store();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("linked")).unwrap();
+        for folder in ["..", ".trash", "a//b", "a\\b", "linked"] {
+            assert!(
+                matches!(store.create_in(folder, "# x"), Err(StoreError::InvalidFolder(_))),
+                "folder {folder:?}"
+            );
+        }
+        assert!(matches!(store.read("../x"), Err(StoreError::InvalidId(_))));
+        assert!(matches!(store.read("linked/x"), Err(StoreError::InvalidFolder(_))));
+    }
 }

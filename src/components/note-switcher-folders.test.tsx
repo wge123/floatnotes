@@ -16,6 +16,12 @@ const metas = [
   },
 ];
 
+/** Full text per id: a word past the bounded snippet only lives here. */
+const bodies: Record<string, string> = {
+  "top-note": "# Top note\nplain",
+  "research/deep/findings": "# Findings\nthe secret gizmo lives here\n\n(far below the snippet) quokka",
+};
+
 const { read } = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../lib/api", () => ({
   api: { list: () => Promise.resolve(metas), read },
@@ -33,7 +39,11 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   read.mockReset();
   read.mockImplementation((id: string) =>
-    Promise.resolve({ ...metas.find((m) => m.id === id), content: "", path: `/n/${id}.md` }),
+    Promise.resolve({
+      ...metas.find((m) => m.id === id),
+      content: bodies[id] ?? "",
+      path: `/n/${id}.md`,
+    }),
   );
   container = document.createElement("div");
   document.body.append(container);
@@ -88,12 +98,18 @@ describe("⌘P with notes in folders", () => {
     expect(rowTexts()[0]).toContain("Findings");
   });
 
-  it("matches on the snippet without reading any note", async () => {
+  it("matches on the snippet", async () => {
     await mount();
     await type("gizmo");
     expect(rowTexts()).toHaveLength(1);
     expect(rowTexts()[0]).toContain("Findings");
-    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("matches a word deep in a note, beyond the snippet", async () => {
+    await mount();
+    await type("quokka");
+    expect(rowTexts()).toHaveLength(1);
+    expect(rowTexts()[0]).toContain("Findings");
   });
 
   it("opens the picked nested note by id", async () => {

@@ -1350,4 +1350,92 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(std::fs::read_to_string(tmp.path().join("work/plan.md")).unwrap(), "# Second");
     }
+
+    // ------------------------------------------ create into a folder (ADR 0016)
+
+    fn folders_in(root: &std::path::Path) -> Vec<String> {
+        let mut out: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[tokio::test]
+    async fn create_into_an_existing_folder_keeps_the_slug_and_suffix_rule() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "work/deep/seed.md", "# Seed");
+        let (status, note) = call(
+            &app,
+            "POST",
+            "/api/notes",
+            Some(serde_json::json!({ "content": "# Plan\nbody", "folder": "work/deep" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let id = note["id"].as_str().unwrap();
+        assert!(id.starts_with("work/deep/plan-"), "id was {id}");
+        assert!(tmp.path().join(format!("{id}.md")).is_file());
+        // Readable through the nested-id route.
+        let (status, read) = call(&app, "GET", &format!("/api/notes/{}", id.replace('/', "%2F")), None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(read["content"], "# Plan\nbody");
+    }
+
+    #[tokio::test]
+    async fn create_without_a_folder_or_with_an_empty_one_is_top_level() {
+        let (tmp, _store, app) = test_app();
+        let (_, a) = call(&app, "POST", "/api/notes", Some(serde_json::json!({ "content": "# A" }))).await;
+        let (_, b) = call(
+            &app,
+            "POST",
+            "/api/notes",
+            Some(serde_json::json!({ "content": "# B", "folder": "" })),
+        )
+        .await;
+        for n in [&a, &b] {
+            assert!(!n["id"].as_str().unwrap().contains('/'));
+        }
+        assert!(folders_in(tmp.path()).iter().all(|f| f == ".trash"));
+    }
+
+    #[tokio::test]
+    async fn create_into_a_missing_folder_is_rejected_and_creates_no_folder() {
+        let (tmp, _store, app) = test_app();
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/api/notes",
+            Some(serde_json::json!({ "content": "# X", "folder": "nope/deeper" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(!tmp.path().join("nope").exists());
+        let (_, list) = call(&app, "GET", "/api/notes", None).await;
+        assert_eq!(list.as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn create_rejects_folders_that_escape_or_are_dot_prefixed() {
+        let (tmp, _store, app) = test_app();
+        std::fs::create_dir_all(tmp.path().join("work")).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("linked")).unwrap();
+        for folder in ["..", "work/../..", ".trash", "work/.hidden", "/etc", "work//x", "work\\x", "linked"] {
+            let (status, _) = call(
+                &app,
+                "POST",
+                "/api/notes",
+                Some(serde_json::json!({ "content": "# Nope", "folder": folder })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "folder {folder:?}");
+        }
+        assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(tmp.path().join(".trash")).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(tmp.path().join("work")).unwrap().count(), 0);
+    }
 }

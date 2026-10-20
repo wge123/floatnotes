@@ -4,6 +4,8 @@ import { api, type NoteMeta } from "../lib/api";
 import { trapTab } from "../lib/focus-trap";
 import { rankNotes } from "../lib/fuzzy";
 
+type SwitcherNote = NoteMeta & { content: string };
+
 export interface NoteSwitcherProps {
   pins: readonly string[];
   currentNoteId: string | null;
@@ -14,13 +16,14 @@ export interface NoteSwitcherProps {
 }
 
 /**
- * ⌘P note switcher (step 06): fuzzy filter over folder + title + snippet, pinned
+ * ⌘P note switcher (step 06): fuzzy filter over folder + title + full content, pinned
  * notes on top, ↑/↓ + Enter opens, Delete deletes (with app-level undo).
  * Esc is handled by the app-level overlay stack.
  *
  * The list is fetched fresh on every open — the switcher is transient and
- * notes can change under us (file watcher), so no caching. Rows come from the
- * list alone (folder + snippet); no note content is read.
+ * notes can change under us (file watcher), so no caching. The list gives the
+ * folder; each note's full text is read too so search covers the whole note,
+ * not just the bounded snippet.
  */
 export default function NoteSwitcher({
   pins,
@@ -30,7 +33,7 @@ export default function NoteSwitcher({
   onClose,
 }: NoteSwitcherProps) {
   const [query, setQuery] = useState("");
-  const [notes, setNotes] = useState<NoteMeta[] | null>(null);
+  const [notes, setNotes] = useState<SwitcherNote[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +44,10 @@ export default function NoteSwitcher({
     let cancelled = false;
     (async () => {
       const metas = await api.list();
-      if (!cancelled) setNotes(metas);
+      const loaded = await Promise.all(
+        metas.map(async (m) => ({ ...m, content: (await api.read(m.id)).content })),
+      );
+      if (!cancelled) setNotes(loaded);
     })().catch((e: unknown) => {
       if (!cancelled) setError(`could not load notes: ${e}`);
     });
@@ -53,11 +59,7 @@ export default function NoteSwitcher({
   const ranked = useMemo(
     () =>
       notes
-        ? rankNotes(
-            query,
-            notes.map((n) => ({ ...n, content: n.snippet })),
-            pins,
-          )
+        ? rankNotes(query, notes, pins)
         : [],
     [notes, query, pins],
   );

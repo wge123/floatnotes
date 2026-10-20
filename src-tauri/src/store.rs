@@ -170,8 +170,17 @@ impl NoteStore {
     }
 
     pub fn create(&self, content: &str) -> Result<Note, StoreError> {
+        self.create_in("", content)
+    }
+
+    /// Create inside `folder` (a relative path under the notes dir; empty is
+    /// the top level). The folder must already exist: FloatNotes never creates
+    /// folders. It follows the same segment rule as note ids, and a symlinked
+    /// segment is refused so the note can't land outside the notes dir.
+    pub fn create_in(&self, folder: &str, content: &str) -> Result<Note, StoreError> {
+        self.check_folder(folder)?;
         let title = derive_title(content);
-        let id = self.new_id(&title);
+        let id = join_id(folder, &self.new_id(folder, &title));
         let path = self.dir.join(format!("{id}.md"));
         self.atomic_write(&path, content)?;
         Ok(Note {
@@ -298,13 +307,42 @@ impl NoteStore {
         Ok(self.dir.join(format!("{id}.md")))
     }
 
-    /// slug + short random suffix; loops until the filename is free.
-    fn new_id(&self, title: &str) -> String {
+    /// An existing, plain (non-symlink) folder under the notes dir, or the
+    /// top level when empty. Same segment rule as `path_for`.
+    fn check_folder(&self, folder: &str) -> Result<(), StoreError> {
+        if folder.is_empty() {
+            return Ok(());
+        }
+        let valid = !folder.contains('\\')
+            && folder.split('/').all(|seg| !seg.is_empty() && !seg.starts_with('.'));
+        if !valid {
+            return Err(StoreError::InvalidId(folder.to_string()));
+        }
+        let mut path = self.dir.clone();
+        for seg in folder.split('/') {
+            path.push(seg);
+            match fs::symlink_metadata(&path) {
+                Ok(meta) if meta.is_dir() => {}
+                Ok(meta) if meta.file_type().is_symlink() => {
+                    return Err(StoreError::InvalidId(folder.to_string()));
+                }
+                Ok(_) => return Err(StoreError::NotFound(folder.to_string())),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    return Err(StoreError::NotFound(folder.to_string()));
+                }
+                Err(e) => return Err(StoreError::Io(e)),
+            }
+        }
+        Ok(())
+    }
+
+    /// slug + short random suffix; loops until the filename is free in `folder`.
+    fn new_id(&self, folder: &str, title: &str) -> String {
         let slug = slugify(title);
         for attempt in 0u64.. {
-            let id = format!("{slug}-{}", random_suffix(attempt));
-            if !self.dir.join(format!("{id}.md")).exists() {
-                return id;
+            let name = format!("{slug}-{}", random_suffix(attempt));
+            if !self.dir.join(format!("{}.md", join_id(folder, &name))).exists() {
+                return name;
             }
         }
         unreachable!("suffix space exhausted");

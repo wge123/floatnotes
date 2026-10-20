@@ -37,6 +37,7 @@ let container: HTMLDivElement;
 let root: Root;
 let onOpen: Mock<(id: string) => void>;
 let onClose: Mock<() => void>;
+let onNewNote: Mock<(folder: string) => void>;
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,6 +46,7 @@ beforeEach(() => {
   root = createRoot(container);
   onOpen = vi.fn<(id: string) => void>();
   onClose = vi.fn<() => void>();
+  onNewNote = vi.fn<(folder: string) => void>();
 });
 
 afterEach(() => {
@@ -64,6 +66,7 @@ const render = (
         currentNoteId={currentNoteId}
         onOpen={onOpen}
         onClose={onClose}
+        onNewNote={onNewNote}
       />,
     ),
   );
@@ -331,12 +334,42 @@ describe("Explorer: keyboard", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("leaves ⌘1–9 (pinned jump) and ⌘N to the app keymap", () => {
+  it("leaves ⌘1–9 (pinned jump) to the app keymap", () => {
     render(null);
 
-    for (const key of ["1", "5", "9", "n"]) {
+    for (const key of ["1", "5", "9"]) {
       expect(press(key, { metaKey: true }).defaultPrevented).toBe(false);
     }
+  });
+});
+
+describe("Explorer: ⌘N creates in the viewed folder", () => {
+  it("passes the viewed folder and closes the Explorer", () => {
+    render("research/findings");
+
+    const event = press("n", { metaKey: true });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onNewNote).toHaveBeenCalledExactlyOnceWith("research");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows navigation: a folder walked into is the target", () => {
+    render(null);
+    dblclick("research");
+    dblclick("deep");
+
+    press("n", { metaKey: true });
+
+    expect(onNewNote).toHaveBeenCalledExactlyOnceWith("research/deep");
+  });
+
+  it("passes the top level as an empty folder", () => {
+    render(null);
+
+    press("n", { metaKey: true });
+
+    expect(onNewNote).toHaveBeenCalledExactlyOnceWith("");
   });
 });
 

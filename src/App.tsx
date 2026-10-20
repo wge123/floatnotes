@@ -625,9 +625,9 @@ function App() {
   }, [note?.id]);
 
   // ------------------------------------------------------------ commands
-  const newNote = useCallback(async () => {
+  const newNote = useCallback(async (folder = "") => {
     try {
-      openNote(await api.create(""));
+      openNote(await api.create("", folder));
     } catch (error) {
       showToast(`could not create note: ${error}`);
     }
@@ -638,6 +638,8 @@ function App() {
       const currentNote = noteRef.current;
       switch (command.kind) {
         case "new-note":
+          // The Explorer's own ⌘N creates in the viewed folder while it is on top.
+          if (topOverlay(overlayStack.current)?.id === "explorer") break;
           void newNote();
           break;
         case "toggle-switcher":
@@ -994,6 +996,7 @@ function App() {
           currentNoteId={note?.id ?? null}
           onOpen={(id) => void openNoteById(id)}
           onClose={() => closeOverlay("explorer")}
+          onNewNote={(folder) => void newNote(folder)}
         />
       )}
       {overlays.includes("action-panel") && (

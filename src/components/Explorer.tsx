@@ -32,6 +32,8 @@ export interface ExplorerProps {
   /** Called with the note id; the Explorer closes itself right before. */
   onOpen: (id: string) => void;
   onClose: () => void;
+  /** ⌘N: create a note in the viewed folder ("" = top level); the Explorer closes itself right before. */
+  onNewNote: (folder: string) => void;
 }
 
 /** Column count of the tile grid, read from the laid-out CSS grid. */
@@ -82,6 +84,7 @@ export default function Explorer({
   currentNoteId,
   onOpen,
   onClose,
+  onNewNote,
 }: ExplorerProps) {
   const list = useMemo(() => notes ?? [], [notes]);
   const [history, setHistory] = useState<FolderHistory>(() =>
@@ -163,8 +166,14 @@ export default function Explorer({
     }
 
     if (event.metaKey) {
-      // ⌘1–9 (pinned jump) and ⌘N are deliberately not here: the app keymap owns them.
+      // ⌘1–9 (pinned jump) are deliberately not here: the app keymap owns them.
       if (event.shiftKey || event.altKey || event.ctrlKey) return;
+      if (event.key === "n") {
+        handled();
+        onClose();
+        onNewNote(folder);
+        return;
+      }
       if (event.key === "ArrowUp") return void (handled() && up());
       if (event.key === "ArrowDown") {
         if (selectedEntry) handled() && activate(selectedEntry);

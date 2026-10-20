@@ -557,8 +557,10 @@ pub fn spawn_watcher(
 
 /// Keep only `.md` files at any depth with no dot-prefixed component below the
 /// notes dir (sidecar, `.tmp-*`, `.trash/`), dedup by path. Returns true when
-/// the event was an error, i.e. a change happened that could not be attributed
-/// to any path.
+/// clients must re-list: the event was an error (a change that could not be
+/// attributed to any path), or it names a visible non-note path that is a
+/// folder or no longer exists. FSEvents can report a moved/removed folder as
+/// one event for the folder, with nothing for the notes inside it.
 fn collect_note_paths(
     dir: &PathBuf,
     event: notify::Result<notify::Event>,
@@ -571,15 +573,36 @@ fn collect_note_paths(
             return true;
         }
     };
+    let mut reindex = false;
     for path in event.paths {
         if note_id(dir, &path).is_none() {
+            reindex |= is_visible_non_note(dir, &path) && (path.is_dir() || !path.exists());
             continue;
         }
         if !out.contains(&path) {
             out.push(path);
         }
     }
-    false
+    reindex
+}
+
+/// A path under the notes dir with no dot-prefixed component that is not a
+/// `.md` file name: a candidate folder.
+fn is_visible_non_note(dir: &std::path::Path, path: &std::path::Path) -> bool {
+    let Ok(rel) = path.strip_prefix(dir) else {
+        return false;
+    };
+    let mut any = false;
+    for c in rel.components() {
+        match c {
+            std::path::Component::Normal(p) => match p.to_str() {
+                Some(part) if !part.starts_with('.') => any = true,
+                _ => return false,
+            },
+            _ => return false,
+        }
+    }
+    any && !path.to_str().is_some_and(|p| p.ends_with(".md"))
 }
 
 /// The nested note id (`folder/name`, no `.md`) for a path under the notes

@@ -74,3 +74,20 @@ describe("rankNotes", () => {
     expect(ranked[1]).toMatchObject({ pinned: false });
   });
 });
+
+describe("rankNotes with folders", () => {
+  const nested = [
+    { id: "research/findings", title: "Findings", folder: "research", content: "" },
+    { id: "misc/other", title: "Other", folder: "misc", content: "" },
+  ];
+
+  it("matches the folder path as well as the title", () => {
+    const ids = rankNotes("research", nested, []).map((r) => r.note.id);
+    expect(ids).toEqual(["research/findings"]);
+  });
+
+  it("matches a query spanning folder and title", () => {
+    const ids = rankNotes("resfind", nested, []).map((r) => r.note.id);
+    expect(ids).toEqual(["research/findings"]);
+  });
+});

@@ -435,7 +435,7 @@ async fn ws_stream(mut socket: WebSocket, mut rx: broadcast::Receiver<Event>) {
 }
 
 /// Store errors → HTTP: NotFound 404, Conflict 409 (with server mtime),
-/// InvalidId 400, Io 500.
+/// InvalidId / InvalidFolder 400, Io 500.
 struct ApiError(StoreError);
 
 impl From<StoreError> for ApiError {
@@ -455,6 +455,11 @@ impl IntoResponse for ApiError {
             StoreError::InvalidId(id) => (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({ "error": "invalid id", "id": id })),
+            )
+                .into_response(),
+            StoreError::InvalidFolder(folder) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid folder", "id": folder })),
             )
                 .into_response(),
             StoreError::Conflict { id, server_mtime } => (
@@ -587,18 +592,13 @@ fn note_id(dir: &std::path::Path, path: &std::path::Path) -> Option<String> {
             std::path::Component::Normal(p) => p.to_str()?,
             _ => return None,
         };
-        if part.starts_with('.') {
-            return None;
-        }
         parts.push(part);
     }
     let last = parts.pop()?;
     let stem = last.strip_suffix(".md")?;
-    if stem.is_empty() {
-        return None;
-    }
     parts.push(stem);
-    Some(parts.join("/"))
+    let id = parts.join("/");
+    store::is_valid_rel_path(&id).then_some(id)
 }
 
 #[cfg(test)]

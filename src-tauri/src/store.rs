@@ -70,6 +70,9 @@ pub enum StoreError {
     NotFound(String),
     #[error("invalid note id: {0}")]
     InvalidId(String),
+    /// A folder that is malformed, or passes through a symlink.
+    #[error("invalid folder: {0}")]
+    InvalidFolder(String),
     #[error("mtime conflict for {id}: server has {server_mtime}")]
     Conflict { id: String, server_mtime: u64 },
     #[error(transparent)]
@@ -294,41 +297,51 @@ impl NoteStore {
         Ok(())
     }
 
-    /// An id is a relative path under the notes dir without `.md` (ADR 0016).
-    /// Every segment must be a plain, non-dot name, so `..`, `.trash/…`,
-    /// empty segments, absolute paths and backslashes can never resolve.
+    /// An id is a relative path under the notes dir without `.md` (ADR 0016),
+    /// valid per `is_valid_rel_path`. Its folder part must not pass through a
+    /// symlinked directory (it would reach outside the notes dir); a symlinked
+    /// note FILE is still followed. Missing folders are fine here (restore
+    /// recreates them).
     fn path_for(&self, id: &str) -> Result<PathBuf, StoreError> {
-        let valid = !id.is_empty()
-            && !id.contains('\\')
-            && id.split('/').all(|seg| !seg.is_empty() && !seg.starts_with('.'));
-        if !valid {
+        if !is_valid_rel_path(id) {
             return Err(StoreError::InvalidId(id.to_string()));
+        }
+        if let Some((folder, _)) = id.rsplit_once('/') {
+            self.walk_folder(folder, false)?;
         }
         Ok(self.dir.join(format!("{id}.md")))
     }
 
     /// An existing, plain (non-symlink) folder under the notes dir, or the
-    /// top level when empty. Same segment rule as `path_for`.
+    /// top level when empty.
     fn check_folder(&self, folder: &str) -> Result<(), StoreError> {
         if folder.is_empty() {
             return Ok(());
         }
-        let valid = !folder.contains('\\')
-            && folder.split('/').all(|seg| !seg.is_empty() && !seg.starts_with('.'));
-        if !valid {
-            return Err(StoreError::InvalidId(folder.to_string()));
+        if !is_valid_rel_path(folder) {
+            return Err(StoreError::InvalidFolder(folder.to_string()));
         }
+        self.walk_folder(folder, true)
+    }
+
+    /// Walk a validated folder path segment by segment: a symlink is refused;
+    /// a missing segment is `NotFound` when `must_exist`, else the walk stops.
+    fn walk_folder(&self, folder: &str, must_exist: bool) -> Result<(), StoreError> {
         let mut path = self.dir.clone();
         for seg in folder.split('/') {
             path.push(seg);
             match fs::symlink_metadata(&path) {
                 Ok(meta) if meta.is_dir() => {}
                 Ok(meta) if meta.file_type().is_symlink() => {
-                    return Err(StoreError::InvalidId(folder.to_string()));
+                    return Err(StoreError::InvalidFolder(folder.to_string()));
                 }
                 Ok(_) => return Err(StoreError::NotFound(folder.to_string())),
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                    return Err(StoreError::NotFound(folder.to_string()));
+                    return if must_exist {
+                        Err(StoreError::NotFound(folder.to_string()))
+                    } else {
+                        Ok(())
+                    };
                 }
                 Err(e) => return Err(StoreError::Io(e)),
             }
@@ -414,6 +427,15 @@ pub fn derive_title(content: &str) -> String {
         .find(|l| !l.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| "Untitled".to_string())
+}
+
+/// The one segment rule for ids and folders: a non-empty `/`-separated path
+/// whose segments are non-empty and not dot-prefixed, with no backslash. So
+/// `..`, `.trash/…`, empty segments, absolute paths and `\` never resolve.
+pub fn is_valid_rel_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains('\\')
+        && path.split('/').all(|seg| !seg.is_empty() && !seg.starts_with('.'))
 }
 
 fn join_id(folder: &str, name: &str) -> String {

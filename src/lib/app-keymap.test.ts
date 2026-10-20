@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   explorerViewChord,
+  installAppKeymap,
   pushOverlay,
   removeOverlay,
   resolveChord,
@@ -174,5 +175,33 @@ describe("⌘⇧1 / ⌘⇧2 (Explorer view chords)", () => {
       kind: "pinned-jump",
       index: 1,
     });
+  });
+});
+
+describe("installAppKeymap", () => {
+  it("ignores a keydown an overlay already handled (defaultPrevented)", () => {
+    const commands: string[] = [];
+    const uninstall = installAppKeymap({
+      overlayDepth: () => 0,
+      closeTopOverlay: () => {},
+      onCommand: (c) => commands.push(c.kind),
+    });
+    try {
+      const handled = new KeyboardEvent("keydown", {
+        key: "n",
+        metaKey: true,
+        cancelable: true,
+      });
+      handled.preventDefault();
+      window.dispatchEvent(handled);
+      expect(commands).toEqual([]);
+
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "n", metaKey: true, cancelable: true }),
+      );
+      expect(commands).toEqual(["new-note"]);
+    } finally {
+      uninstall();
+    }
   });
 });

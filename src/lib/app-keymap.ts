@@ -151,6 +151,9 @@ export interface AppKeymapHandlers {
 /** Window-scoped keydown wiring; returns the uninstaller. */
 export function installAppKeymap(handlers: AppKeymapHandlers): () => void {
   const onKeydown = (event: KeyboardEvent) => {
+    // An overlay (e.g. the Explorer's ⌘N) already handled this keydown; the
+    // native event still bubbles here, so acting again would double-fire.
+    if (event.defaultPrevented) return;
     const effect = resolveChord(handlers.overlayDepth(), event);
     if (effect.kind === "none") return;
     event.preventDefault();

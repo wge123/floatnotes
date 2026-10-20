@@ -1273,6 +1273,43 @@ mod tests {
         assert!(tmp.path().join("a/real.md").is_file());
     }
 
+    /// A symlinked FOLDER would let `linked/x` reach files outside the notes
+    /// dir, so every route refuses an id that passes through one (same stance
+    /// as `list` and `create`). A symlinked note FILE is still followed.
+    #[tokio::test]
+    async fn ids_through_a_symlinked_folder_are_refused_on_every_note_route() {
+        let (tmp, _store, app) = test_app();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("x.md"), "# Outside").unwrap();
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("linked")).unwrap();
+        // A symlinked note file inside a real folder keeps working.
+        write_note(tmp.path(), "real/target.md", "# Target");
+        std::os::unix::fs::symlink(tmp.path().join("real/target.md"), tmp.path().join("real/alias.md")).unwrap();
+
+        for id in ["linked%2Fx", "linked%2Fsub%2Fx"] {
+            let (status, _) = call(&app, "GET", &format!("/api/notes/{id}"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "GET {id}");
+            let (status, _) = call(
+                &app,
+                "PUT",
+                &format!("/api/notes/{id}"),
+                Some(serde_json::json!({ "content": "pwned", "mtime": 0 })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "PUT {id}");
+            let (status, _) = call(&app, "DELETE", &format!("/api/notes/{id}"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "DELETE {id}");
+            let (status, _) = call(&app, "POST", &format!("/api/notes/{id}/restore"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "restore {id}");
+        }
+        assert_eq!(std::fs::read_to_string(outside.path().join("x.md")).unwrap(), "# Outside");
+        assert!(!tmp.path().join(".trash/linked").exists());
+
+        let (status, note) = call(&app, "GET", "/api/notes/real%2Falias", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(note["content"], "# Target");
+    }
+
     #[tokio::test]
     async fn top_level_ids_keep_working_unchanged() {
         let (tmp, _store, app) = test_app();

@@ -1028,4 +1028,192 @@ mod tests {
             "expected an unmasked server echo frame"
         );
     }
+
+    // ------------------------------------------------ nested notes (ADR 0016)
+
+    async fn call(
+        app: &Router,
+        method: &str,
+        uri: &str,
+        body: Option<serde_json::Value>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut builder = Request::builder().method(method).uri(uri);
+        let body = match body {
+            Some(b) => {
+                builder = builder.header("content-type", "application/json");
+                Body::from(b.to_string())
+            }
+            None => Body::empty(),
+        };
+        let resp = app.clone().oneshot(builder.body(body).unwrap()).await.unwrap();
+        let status = resp.status();
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        (status, json)
+    }
+
+    fn write_note(root: &std::path::Path, rel: &str, content: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_includes_notes_at_any_depth_with_folder_and_snippet() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "top.md", "# Top\nbody");
+        write_note(tmp.path(), "research/findings.md", "# Findings\n\none\n\ntwo\nthree\nfour\n");
+        write_note(tmp.path(), "a/b/c/deep.md", "# Deep");
+
+        let (status, list) = call(&app, "GET", "/api/notes", None).await;
+        assert_eq!(status, StatusCode::OK);
+        let find = |id: &str| {
+            list.as_array()
+                .unwrap()
+                .iter()
+                .find(|n| n["id"] == id)
+                .unwrap_or_else(|| panic!("{id} missing from {list}"))
+                .clone()
+        };
+        assert_eq!(list.as_array().unwrap().len(), 3);
+        assert_eq!(find("top")["folder"], "");
+        assert_eq!(find("research/findings")["folder"], "research");
+        assert_eq!(find("research/findings")["title"], "Findings");
+        assert_eq!(find("a/b/c/deep")["folder"], "a/b/c");
+        // First few non-empty lines after the title, bounded.
+        assert_eq!(find("research/findings")["snippet"], "one\ntwo\nthree");
+        assert_eq!(find("top")["snippet"], "body");
+        assert_eq!(find("a/b/c/deep")["snippet"], "");
+    }
+
+    #[tokio::test]
+    async fn snippet_is_bounded() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "long.md", &format!("# Long\n{}", "x".repeat(5000)));
+        let (_, list) = call(&app, "GET", "/api/notes", None).await;
+        let snippet = list[0]["snippet"].as_str().unwrap_or("");
+        assert!(
+            !snippet.is_empty() && snippet.chars().count() <= 400,
+            "snippet length {}",
+            snippet.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn list_skips_dot_names_symlinked_folders_and_non_md_at_every_depth() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "keep/ok.md", "# Ok");
+        write_note(tmp.path(), ".git/hidden.md", "# Hidden");
+        write_note(tmp.path(), "keep/.secret/hidden.md", "# Hidden deep");
+        write_note(tmp.path(), "keep/.dot.md", "# Dot file");
+        write_note(tmp.path(), "keep/pic.png", "not a note");
+        write_note(tmp.path(), "keep/page.html", "<p>no</p>");
+        let outside = tempfile::tempdir().unwrap();
+        write_note(outside.path(), "linked-note.md", "# Linked");
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("linked")).unwrap();
+
+        let (_, list) = call(&app, "GET", "/api/notes", None).await;
+        let ids: Vec<&str> = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["keep/ok"], "got {ids:?}");
+    }
+
+    #[tokio::test]
+    async fn nested_note_reads_and_saves_by_encoded_id_with_409_on_stale_mtime() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "research/deep/findings.md", "# Findings\nbody");
+
+        let (status, note) = call(&app, "GET", "/api/notes/research%2Fdeep%2Ffindings", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(note["id"], "research/deep/findings");
+        assert_eq!(note["content"], "# Findings\nbody");
+        let mtime = note["mtime"].as_u64().unwrap();
+
+        let (status, _) = call(
+            &app,
+            "PUT",
+            "/api/notes/research%2Fdeep%2Ffindings",
+            Some(serde_json::json!({ "content": "clobber", "mtime": mtime + 1 })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("research/deep/findings.md")).unwrap(),
+            "# Findings\nbody"
+        );
+
+        let (status, saved) = call(
+            &app,
+            "PUT",
+            "/api/notes/research%2Fdeep%2Ffindings",
+            Some(serde_json::json!({ "content": "# Findings\nedited", "mtime": mtime })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(saved["id"], "research/deep/findings");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("research/deep/findings.md")).unwrap(),
+            "# Findings\nedited"
+        );
+    }
+
+    #[tokio::test]
+    async fn ids_that_escape_the_notes_dir_are_rejected_on_every_note_route() {
+        let (tmp, _store, app) = test_app();
+        // A real file one level above the notes dir and a file in .trash/.
+        let parent = tmp.path().parent().unwrap().to_path_buf();
+        let victim = parent.join("floatnotes-escape-victim.md");
+        std::fs::write(&victim, "# Victim").unwrap();
+        write_note(tmp.path(), ".trash/gone.md", "# Trashed");
+        write_note(tmp.path(), "a/real.md", "# Real");
+
+        let bad_ids = [
+            "..%2Ffloatnotes-escape-victim",
+            "a%2F..%2F..%2Ffloatnotes-escape-victim",
+            "a%2F..%2Freal",
+            ".trash%2Fgone",
+            "a%2F.hidden",
+            "%2Fetc%2Fpasswd",
+            "a%2F%2Freal",
+            "a%2F",
+            "a%5C..%5Creal",
+        ];
+        for id in bad_ids {
+            let (status, _) = call(&app, "GET", &format!("/api/notes/{id}"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "GET {id}");
+            let (status, _) = call(
+                &app,
+                "PUT",
+                &format!("/api/notes/{id}"),
+                Some(serde_json::json!({ "content": "pwned", "mtime": 0 })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "PUT {id}");
+            let (status, _) = call(&app, "DELETE", &format!("/api/notes/{id}"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "DELETE {id}");
+            let (status, _) = call(&app, "POST", &format!("/api/notes/{id}/restore"), None).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "restore {id}");
+        }
+        let victim_content = std::fs::read_to_string(&victim).unwrap();
+        std::fs::remove_file(&victim).unwrap();
+        assert_eq!(victim_content, "# Victim");
+        assert!(tmp.path().join(".trash/gone.md").is_file());
+        assert!(tmp.path().join("a/real.md").is_file());
+    }
+
+    #[tokio::test]
+    async fn top_level_ids_keep_working_unchanged() {
+        let (tmp, _store, app) = test_app();
+        write_note(tmp.path(), "plain-abc123.md", "# Plain");
+        let (status, note) = call(&app, "GET", "/api/notes/plain-abc123", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(note["id"], "plain-abc123");
+        let (status, _) = call(&app, "DELETE", "/api/notes/plain-abc123", None).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(tmp.path().join(".trash/plain-abc123.md").is_file());
+    }
 }

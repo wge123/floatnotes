@@ -215,12 +215,12 @@ impl NoteStore {
         if !path.is_file() {
             return Err(StoreError::NotFound(id.to_string()));
         }
-        let trash = self.dir.join(TRASH_DIR);
-        fs::create_dir_all(&trash)?;
-        let mut target = trash.join(format!("{id}.md"));
+        // A nested note keeps its folder path inside the trash (glossary: Trash).
+        let mut target = self.dir.join(TRASH_DIR).join(format!("{id}.md"));
         if target.exists() {
-            target = trash.join(format!("{id}-{}.md", now_millis()));
+            target = self.dir.join(TRASH_DIR).join(format!("{id}-{}.md", now_millis()));
         }
+        fs::create_dir_all(target.parent().expect("trash target has a parent"))?;
         fs::rename(&path, &target)?;
         Ok(())
     }
@@ -237,8 +237,14 @@ impl NoteStore {
         let trash = self.dir.join(TRASH_DIR);
         let mut candidate = trash.join(format!("{id}.md"));
         if !candidate.is_file() {
-            let prefix = format!("{id}-");
-            candidate = fs::read_dir(&trash)?
+            // Collision copies sit beside the exact name, in the same trash folder.
+            let (folder, stem) = id.rsplit_once('/').unwrap_or(("", id));
+            let prefix = format!("{stem}-");
+            candidate = fs::read_dir(trash.join(folder))
+                .map_err(|e| match e.kind() {
+                    io::ErrorKind::NotFound => StoreError::NotFound(id.to_string()),
+                    _ => StoreError::Io(e),
+                })?
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| {
                     p.file_name()
@@ -248,6 +254,8 @@ impl NoteStore {
                 .max_by_key(|p| file_mtime(p).unwrap_or(0))
                 .ok_or_else(|| StoreError::NotFound(id.to_string()))?;
         }
+        // The original folder may have been removed externally; recreate it.
+        fs::create_dir_all(path.parent().expect("note path has a parent"))?;
         fs::rename(&candidate, &path)?;
         self.read(id)
     }

@@ -112,6 +112,18 @@ export default function Explorer({
 
   useEffect(() => gridRef.current?.focus(), []);
 
+  // The list can be refreshed while open (external moves/deletes). Folders
+  // exist only where notes live, so a vanished current folder falls back to
+  // its nearest surviving ancestor. Not while loading (`notes` is null).
+  useEffect(() => {
+    if (notes === null || folder === "") return;
+    const live = new Set(notes.flatMap((n) => pathChain(n.folder)));
+    if (live.has(folder)) return;
+    const survivor = pathChain(folder).reverse().find((p) => live.has(p)) ?? "";
+    setHistory((h) => visitFolder(h, survivor));
+    setSelected(null);
+  }, [notes, folder]);
+
   useEffect(() => {
     if (selIndex < 0) return;
     gridRef.current

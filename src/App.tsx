@@ -163,23 +163,32 @@ function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
-  // The Explorer's note list: fetched fresh on every open (like ⌘P), so the
-  // watcher never needs to feed it; null while loading.
+  // The Explorer's note list: fetched on open, then re-fetched on every
+  // watcher event while it stays open (see the sync handler); null while
+  // loading. The latest response wins, so a slow stale fetch can't clobber it.
   const [explorerNotes, setExplorerNotes] = useState<NoteMeta[] | null>(null);
   const explorerOpen = overlays.includes("explorer");
+  const refreshExplorer = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!explorerOpen) return;
     let cancelled = false;
-    api
-      .list()
-      .then((metas) => {
-        if (!cancelled) setExplorerNotes(metas);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) showToast(`could not load notes: ${error}`);
-      });
+    let latest = 0;
+    const load = () => {
+      const mine = ++latest;
+      api
+        .list()
+        .then((metas) => {
+          if (!cancelled && mine === latest) setExplorerNotes(metas);
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) showToast(`could not load notes: ${error}`);
+        });
+    };
+    refreshExplorer.current = load;
+    load();
     return () => {
       cancelled = true;
+      refreshExplorer.current = null;
       setExplorerNotes(null);
     };
   }, [explorerOpen, showToast]);
@@ -572,6 +581,8 @@ function App() {
   // NO polling — this channel plus the auto-save 409 path IS the sync story.
   useEffect(() => {
     const socket = connectSync((event) => {
+      // An open Explorer re-lists on any watcher event, even our own echoes.
+      refreshExplorer.current?.();
       // Echo of our own DELETE — deleteWithUndo already handled the swap.
       if (event.type === "note-deleted" && locallyDeleted.current.delete(event.id)) {
         return;

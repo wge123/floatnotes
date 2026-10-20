@@ -568,8 +568,8 @@ describe("Explorer: Preview cards", () => {
     click(viewButton("Preview"));
 
     const card = tile("research");
-    // deep/ plus eight notes
-    expect(card.textContent).toContain("9 items");
+    // deep/ plus seven notes
+    expect(card.textContent).toContain("8 items");
     const entries = [...card.querySelectorAll("[data-folder-entry]")].map((e) => e.textContent);
     expect(entries).toEqual(["deep", "Alpha doc", "Beta", "Gamma", "Delta"]);
   });

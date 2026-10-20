@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import Explorer from "./Explorer";
 import type { NoteMeta } from "../lib/api";
@@ -35,16 +35,16 @@ const NOTES: NoteMeta[] = [
 
 let container: HTMLDivElement;
 let root: Root;
-let onOpen: ReturnType<typeof vi.fn>;
-let onClose: ReturnType<typeof vi.fn>;
+let onOpen: Mock<(id: string) => void>;
+let onClose: Mock<() => void>;
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  onOpen = vi.fn();
-  onClose = vi.fn();
+  onOpen = vi.fn<(id: string) => void>();
+  onClose = vi.fn<() => void>();
 });
 
 afterEach(() => {

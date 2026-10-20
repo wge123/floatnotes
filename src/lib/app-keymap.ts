@@ -9,7 +9,8 @@ import { invoke } from "@tauri-apps/api/core";
  * live in lib/editor-keymap.ts, not here.
  *
  * Step 06 chords: ⌘N new · ⌘P switcher · ⇧⌘P pin · ⌘1–9 pinned jump ·
- * ⌘[/⌘] history · ⌘K actions · ⌘F find.
+ * ⌘[/⌘] history · ⌘K actions · ⌘F find · ⌘O Explorer. While the Explorer is
+ * the top overlay, ⌘[/⌘] are its folder history (App skips note history).
  * Step 09 chords: ⌘=/⌘- zoom · ⌘0 zoom reset. Esc with no overlays emits
  * `dismiss-panel` (App decides hide vs unfocus per the sidecar setting);
  * ⌘W stays a hard hide.
@@ -28,6 +29,7 @@ export type KeymapEffect =
   | { kind: "dismiss-panel" }
   | { kind: "new-note" }
   | { kind: "toggle-switcher" }
+  | { kind: "toggle-explorer" }
   | { kind: "toggle-pin" }
   /** 0-based index into the pinned list (⌘1 → 0 … ⌘9 → 8). */
   | { kind: "pinned-jump"; index: number }
@@ -75,6 +77,8 @@ export function resolveChord(
       return { kind: "new-note" };
     case "p":
       return { kind: "toggle-switcher" };
+    case "o":
+      return { kind: "toggle-explorer" };
     case "k":
       return { kind: "action-panel" };
     case "f":

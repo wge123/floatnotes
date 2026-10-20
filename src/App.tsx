@@ -8,10 +8,11 @@ import ActionPanel, { type Action } from "./components/ActionPanel";
 import Editor from "./components/Editor";
 import FindBar from "./components/FindBar";
 import FormatBar from "./components/FormatBar";
+import Explorer from "./components/Explorer";
 import NoteSwitcher from "./components/NoteSwitcher";
 import StatusBar from "./components/StatusBar";
 import TitleBar from "./components/TitleBar";
-import { api, type Note, type Sidecar } from "./lib/api";
+import { api, type Note, type NoteMeta, type Sidecar } from "./lib/api";
 import {
   hidePanel,
   installAppKeymap,
@@ -85,7 +86,7 @@ function bootNote(deeplinkId: string | null): Promise<Note> {
   return bootPromise;
 }
 
-type OverlayId = "switcher" | "action-panel" | "find";
+type OverlayId = "switcher" | "action-panel" | "find" | "explorer";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 /**
@@ -161,6 +162,27 @@ function App() {
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), TOAST_MS);
   }, []);
+
+  // The Explorer's note list: fetched fresh on every open (like ⌘P), so the
+  // watcher never needs to feed it; null while loading.
+  const [explorerNotes, setExplorerNotes] = useState<NoteMeta[] | null>(null);
+  const explorerOpen = overlays.includes("explorer");
+  useEffect(() => {
+    if (!explorerOpen) return;
+    let cancelled = false;
+    api
+      .list()
+      .then((metas) => {
+        if (!cancelled) setExplorerNotes(metas);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) showToast(`could not load notes: ${error}`);
+      });
+    return () => {
+      cancelled = true;
+      setExplorerNotes(null);
+    };
+  }, [explorerOpen, showToast]);
 
   /** Absolute .md path to the clipboard — the title bar's click gesture. */
   const copyPath = useCallback(
@@ -621,6 +643,9 @@ function App() {
         case "toggle-switcher":
           toggleOverlay("switcher");
           break;
+        case "toggle-explorer":
+          toggleOverlay("explorer");
+          break;
         case "toggle-pin":
           if (currentNote) togglePin(currentNote.id);
           break;
@@ -647,6 +672,8 @@ function App() {
           }
           break;
         case "history-back": {
+          // The Explorer's own folder history takes ⌘[ while it is on top.
+          if (topOverlay(overlayStack.current)?.id === "explorer") break;
           const moved = back(historyRef.current);
           if (moved !== historyRef.current) {
             historyRef.current = moved;
@@ -656,6 +683,7 @@ function App() {
           break;
         }
         case "history-forward": {
+          if (topOverlay(overlayStack.current)?.id === "explorer") break;
           const moved = forward(historyRef.current);
           if (moved !== historyRef.current) {
             historyRef.current = moved;
@@ -800,6 +828,12 @@ function App() {
       label: "Browse Notes",
       shortcut: "⌘P",
       run: () => openOverlay("switcher"),
+    },
+    {
+      id: "browse-folders",
+      label: "Browse Folders",
+      shortcut: "⌘O",
+      run: () => openOverlay("explorer"),
     },
     {
       id: "find",
@@ -952,6 +986,14 @@ function App() {
           }}
           onDelete={(target) => void deleteWithUndo(target)}
           onClose={() => closeOverlay("switcher")}
+        />
+      )}
+      {overlays.includes("explorer") && (
+        <Explorer
+          notes={explorerNotes}
+          currentNoteId={note?.id ?? null}
+          onOpen={(id) => void openNoteById(id)}
+          onClose={() => closeOverlay("explorer")}
         />
       )}
       {overlays.includes("action-panel") && (

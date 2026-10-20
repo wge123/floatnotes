@@ -29,6 +29,10 @@ pub struct NoteMeta {
     pub id: String,
     pub title: String,
     pub mtime: u64,
+    /// The id's directory part (`research/deep`); empty for a top-level note.
+    pub folder: String,
+    /// The first few non-empty lines after the title, bounded (see `derive_snippet`).
+    pub snippet: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,27 +110,45 @@ impl NoteStore {
         &self.dir
     }
 
+    /// Every `.md` note at any depth (ADR 0016). Dot-prefixed names are
+    /// skipped at every depth and symlinked folders are not followed.
     pub fn list(&self) -> Result<Vec<NoteMeta>, StoreError> {
         let mut notes = Vec::new();
-        for entry in fs::read_dir(&self.dir)? {
+        self.collect(&self.dir, "", &mut notes)?;
+        // Newest first; explicit ordering lives in the sidecar (later steps).
+        notes.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+        Ok(notes)
+    }
+
+    fn collect(&self, dir: &Path, folder: &str, out: &mut Vec<NoteMeta>) -> Result<(), StoreError> {
+        for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
-            if name.starts_with('.') || !name.ends_with(".md") || !path.is_file() {
+            if name.starts_with('.') {
+                continue;
+            }
+            // `file_type` does not follow symlinks, so a linked folder is
+            // neither a dir here nor followed.
+            if entry.file_type()?.is_dir() {
+                self.collect(&path, &join_id(folder, name), out)?;
+                continue;
+            }
+            if !name.ends_with(".md") || !path.is_file() {
                 continue;
             }
             let content = fs::read_to_string(&path)?;
-            notes.push(NoteMeta {
-                id: name.trim_end_matches(".md").to_string(),
+            out.push(NoteMeta {
+                id: join_id(folder, name.trim_end_matches(".md")),
                 title: derive_title(&content),
                 mtime: file_mtime(&path)?,
+                folder: folder.to_string(),
+                snippet: derive_snippet(&content),
             });
         }
-        // Newest first; explicit ordering lives in the sidecar (later steps).
-        notes.sort_by(|a, b| b.mtime.cmp(&a.mtime));
-        Ok(notes)
+        Ok(())
     }
 
     pub fn read(&self, id: &str) -> Result<Note, StoreError> {
@@ -255,13 +277,14 @@ impl NoteStore {
         Ok(())
     }
 
+    /// An id is a relative path under the notes dir without `.md` (ADR 0016).
+    /// Every segment must be a plain, non-dot name, so `..`, `.trash/…`,
+    /// empty segments, absolute paths and backslashes can never resolve.
     fn path_for(&self, id: &str) -> Result<PathBuf, StoreError> {
-        if id.is_empty()
-            || id.starts_with('.')
-            || id.contains('/')
-            || id.contains('\\')
-            || id.contains("..")
-        {
+        let valid = !id.is_empty()
+            && !id.contains('\\')
+            && id.split('/').all(|seg| !seg.is_empty() && !seg.starts_with('.'));
+        if !valid {
             return Err(StoreError::InvalidId(id.to_string()));
         }
         Ok(self.dir.join(format!("{id}.md")))
@@ -345,6 +368,31 @@ pub fn derive_title(content: &str) -> String {
         .find(|l| !l.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| "Untitled".to_string())
+}
+
+fn join_id(folder: &str, name: &str) -> String {
+    if folder.is_empty() {
+        name.to_string()
+    } else {
+        format!("{folder}/{name}")
+    }
+}
+
+const SNIPPET_LINES: usize = 3;
+const SNIPPET_MAX_CHARS: usize = 300;
+
+/// The first few non-empty lines after the title line, joined by `\n` and
+/// cut to `SNIPPET_MAX_CHARS`.
+pub fn derive_snippet(content: &str) -> String {
+    let joined = content
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.trim_start_matches('#').trim().is_empty())
+        .skip(1) // the title
+        .take(SNIPPET_LINES)
+        .collect::<Vec<_>>()
+        .join("\n");
+    joined.chars().take(SNIPPET_MAX_CHARS).collect()
 }
 
 pub fn slugify(title: &str) -> String {
@@ -631,7 +679,7 @@ mod tests {
     #[test]
     fn ids_cannot_escape_the_notes_dir() {
         let (_tmp, store) = store();
-        for bad in ["../evil", ".hidden", "a/b", ""] {
+        for bad in ["../evil", ".hidden", "a//b", "a/../b", "/abs", ".trash/x", ""] {
             assert!(matches!(
                 store.read(bad),
                 Err(StoreError::InvalidId(_))

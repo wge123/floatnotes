@@ -913,6 +913,50 @@ mod tests {
         ));
     }
 
+    /// Notes live in folders (ADR 0016): an external edit anywhere under the
+    /// notes dir broadcasts with the nested id, while dot-paths at any depth
+    /// stay silent.
+    #[tokio::test]
+    async fn watcher_covers_subfolders_with_nested_ids_and_skips_dot_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = NoteStore::open(dir.path()).expect("open store");
+        std::fs::create_dir_all(store.dir().join("research/deep")).unwrap();
+        std::fs::create_dir_all(store.dir().join(".trash/old")).unwrap();
+        std::fs::create_dir_all(store.dir().join("research/.hidden")).unwrap();
+        let (tx, mut rx) = broadcast::channel(64);
+        let _watcher = spawn_watcher(store.dir().to_path_buf(), tx, |_| {}).expect("watcher");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // Silent: trash internals, a dot-folder, a dotfile at depth.
+        std::fs::write(store.dir().join(".trash/old/gone.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/.hidden/h.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/.tmp-abc.md"), "# x").unwrap();
+        std::fs::write(store.dir().join("research/deep/note.txt"), "x").unwrap();
+        // Loud: a nested note, then a top-level one.
+        std::fs::write(store.dir().join("research/deep/findings.md"), "# F").unwrap();
+
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("nested watcher event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "note-changed");
+        assert_eq!(event.id, "research/deep/findings");
+        assert!(event.mtime.is_some());
+
+        std::fs::remove_file(store.dir().join("research/deep/findings.md")).unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("nested delete event within 5s")
+            .expect("channel open");
+        assert_eq!(event.kind, "note-deleted");
+        assert_eq!(event.id, "research/deep/findings");
+
+        assert!(matches!(
+            rx.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+    }
+
     /// A watcher that stops is the app's quietest failure: every surface keeps
     /// rendering while external edits stop arriving. Its death has to be
     /// reported (banner) and told to the clients (reindex), not just end a

@@ -981,6 +981,46 @@ mod tests {
         ));
     }
 
+    /// FSEvents can report a moved/removed folder as ONE event for the folder
+    /// path, with nothing for the notes inside. No `.md` path means no
+    /// per-note event, so clients must be told to re-list.
+    #[tokio::test]
+    async fn watcher_asks_clients_to_reindex_when_a_folder_moves_or_vanishes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = NoteStore::open(dir.path()).expect("open store");
+        std::fs::create_dir_all(store.dir().join("proj")).unwrap();
+        std::fs::create_dir_all(store.dir().join("gone")).unwrap();
+        std::fs::write(store.dir().join("proj/n.md"), "# N").unwrap();
+        std::fs::write(store.dir().join("gone/g.md"), "# G").unwrap();
+        let elsewhere = tempfile::tempdir().expect("elsewhere");
+        let (tx, mut rx) = broadcast::channel(64);
+        let _watcher = spawn_watcher(store.dir().to_path_buf(), tx, |_| {}).expect("watcher");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        async fn saw_reindex(rx: &mut broadcast::Receiver<Event>) -> bool {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while let Ok(Ok(event)) = tokio::time::timeout(
+                deadline.saturating_duration_since(Instant::now()),
+                rx.recv(),
+            )
+            .await
+            {
+                if event.kind == "notes-reindexed" {
+                    return true;
+                }
+            }
+            false
+        }
+
+        // Moved out of the notes dir.
+        std::fs::rename(store.dir().join("proj"), elsewhere.path().join("proj")).unwrap();
+        assert!(saw_reindex(&mut rx).await, "no reindex after the folder moved away");
+
+        // Removed outright.
+        std::fs::remove_dir_all(store.dir().join("gone")).unwrap();
+        assert!(saw_reindex(&mut rx).await, "no reindex after the folder was removed");
+    }
+
     /// A watcher that stops is the app's quietest failure: every surface keeps
     /// rendering while external edits stop arriving. Its death has to be
     /// reported (banner) and told to the clients (reindex), not just end a

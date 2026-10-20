@@ -335,13 +335,17 @@ async fn list_notes(State(state): State<AppState>) -> Result<Json<Vec<store::Not
 #[derive(Deserialize)]
 struct CreateBody {
     content: String,
+    /// Existing folder to create in (relative to the notes dir); absent or
+    /// empty means the top level. Never created on demand.
+    #[serde(default)]
+    folder: String,
 }
 
 async fn create_note(
     State(state): State<AppState>,
     Json(body): Json<CreateBody>,
 ) -> Result<(StatusCode, Json<store::Note>), ApiError> {
-    let note = state.store.create(&body.content)?;
+    let note = state.store.create_in(&body.folder, &body.content)?;
     broadcast_event(&state.tx, Event::changed(note.id.clone(), note.mtime));
     Ok((StatusCode::CREATED, Json(note)))
 }

@@ -97,8 +97,12 @@ export const api = {
   /** Newest first (server sorts by mtime desc). */
   list: (): Promise<NoteMeta[]> => request("/api/notes"),
 
-  create: (content: string): Promise<Note> =>
-    request("/api/notes", { method: "POST", body: JSON.stringify({ content }) }),
+  /** `folder` must already exist (never created); omit for the top level. */
+  create: (content: string, folder = ""): Promise<Note> =>
+    request("/api/notes", {
+      method: "POST",
+      body: JSON.stringify(folder ? { content, folder } : { content }),
+    }),
 
   read: (id: string): Promise<Note> =>
     request(`/api/notes/${encodeURIComponent(id)}`),

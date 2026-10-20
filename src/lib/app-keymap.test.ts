@@ -129,3 +129,17 @@ describe("overlay stack helpers", () => {
     expect(removed).not.toBe(original);
   });
 });
+
+describe("⌘O", () => {
+  const chord = (shiftKey = false) => ({ key: "o", metaKey: true, shiftKey });
+
+  it("toggles the Explorer, with or without overlays open", () => {
+    expect(resolveChord(0, chord())).toEqual({ kind: "toggle-explorer" });
+    expect(resolveChord(2, chord())).toEqual({ kind: "toggle-explorer" });
+  });
+
+  it("leaves a bare O and ⇧⌘O alone", () => {
+    expect(resolveChord(0, { key: "o", metaKey: false })).toEqual({ kind: "none" });
+    expect(resolveChord(0, chord(true))).toEqual({ kind: "none" });
+  });
+});

@@ -493,8 +493,9 @@ pub fn spawn_watcher(
     let mut watcher = notify::recommended_watcher(move |res| {
         let _ = raw_tx.send(res);
     })?;
-    // NonRecursive: events inside .trash/ never reach us.
-    watcher.watch(&dir, RecursiveMode::NonRecursive)?;
+    // Recursive (ADR 0016); dot-paths such as .trash/ are filtered in
+    // `collect_note_paths`.
+    watcher.watch(&dir, RecursiveMode::Recursive)?;
 
     std::thread::spawn(move || {
         while let Ok(first) = raw_rx.recv() {
@@ -516,8 +517,8 @@ pub fn spawn_watcher(
                 }
             }
             for path in paths {
-                let id = match path.file_stem().and_then(|s| s.to_str()) {
-                    Some(stem) => stem.to_string(),
+                let id = match note_id(&dir, &path) {
+                    Some(id) => id,
                     None => continue,
                 };
                 let event = match file_mtime(&path) {
@@ -545,9 +546,10 @@ pub fn spawn_watcher(
     Ok(watcher)
 }
 
-/// Keep only direct-child `.md` files that aren't dotfiles (sidecar, `.tmp-*`),
-/// dedup by path. Returns true when the event was an error, i.e. a change
-/// happened that could not be attributed to any path.
+/// Keep only `.md` files at any depth with no dot-prefixed component below the
+/// notes dir (sidecar, `.tmp-*`, `.trash/`), dedup by path. Returns true when
+/// the event was an error, i.e. a change happened that could not be attributed
+/// to any path.
 fn collect_note_paths(
     dir: &PathBuf,
     event: notify::Result<notify::Event>,
@@ -561,13 +563,7 @@ fn collect_note_paths(
         }
     };
     for path in event.paths {
-        if path.parent() != Some(dir.as_path()) {
-            continue; // .trash/ internals etc.
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if name.starts_with('.') || !name.ends_with(".md") {
+        if note_id(dir, &path).is_none() {
             continue;
         }
         if !out.contains(&path) {
@@ -575,6 +571,30 @@ fn collect_note_paths(
         }
     }
     false
+}
+
+/// The nested note id (`folder/name`, no `.md`) for a path under the notes
+/// dir, or None for anything that is not a visible note.
+fn note_id(dir: &std::path::Path, path: &std::path::Path) -> Option<String> {
+    let rel = path.strip_prefix(dir).ok()?;
+    let mut parts: Vec<&str> = Vec::new();
+    for c in rel.components() {
+        let part = match c {
+            std::path::Component::Normal(p) => p.to_str()?,
+            _ => return None,
+        };
+        if part.starts_with('.') {
+            return None;
+        }
+        parts.push(part);
+    }
+    let last = parts.pop()?;
+    let stem = last.strip_suffix(".md")?;
+    if stem.is_empty() {
+        return None;
+    }
+    parts.push(stem);
+    Some(parts.join("/"))
 }
 
 #[cfg(test)]

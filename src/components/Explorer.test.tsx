@@ -443,3 +443,235 @@ describe("Explorer: overlay behaviour", () => {
     expect(document.activeElement).not.toBe(decoy);
   });
 });
+
+// ---- Preview view and filter ----
+
+const PREVIEW_NOTES: NoteMeta[] = [
+  { ...note("scratch", "Scratch", 5), snippet: "line one\nline two\nline three\nline four\nline five" },
+  note("zeta", "Zeta", 9),
+  { ...note("research/findings", "Findings doc", 3), snippet: "findings body" },
+  note("research/alpha", "Alpha doc", 8),
+  note("research/beta", "Beta", 7),
+  note("research/gamma", "Gamma", 6),
+  note("research/delta", "Delta", 5),
+  note("research/epsilon", "Epsilon", 4),
+  note("research/eta", "Eta", 2),
+  note("research/deep/one", "Deep one", 1),
+  note("work/plan", "Roadmap", 4),
+];
+
+const viewButton = (name: "Icons" | "Preview") =>
+  container.querySelector<HTMLButtonElement>(`button[data-view="${name}"]`);
+const filterInput = () =>
+  container.querySelector<HTMLInputElement>('input[aria-label="Filter"]');
+const cards = () =>
+  [...container.querySelectorAll<HTMLElement>("[data-preview-card]")];
+const click = (el: Element | null) =>
+  act(() => {
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+function typeFilter(text: string) {
+  const input = filterInput();
+  expect(input).not.toBeNull();
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+function chord(key: string, code: string, target: Element = listbox()) {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    code,
+    metaKey: true,
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  act(() => {
+    target.dispatchEvent(event);
+  });
+  return event;
+}
+
+describe("Explorer: Icons | Preview toggle", () => {
+  it("starts on Icons, with a toggle in the toolbar", () => {
+    render(null, PREVIEW_NOTES);
+
+    expect(viewButton("Icons")?.getAttribute("aria-pressed")).toBe("true");
+    expect(viewButton("Preview")?.getAttribute("aria-pressed")).toBe("false");
+    expect(cards()).toHaveLength(0);
+  });
+
+  it("the toolbar button switches to Preview cards and back", () => {
+    render(null, PREVIEW_NOTES);
+
+    click(viewButton("Preview"));
+    expect(viewButton("Preview")?.getAttribute("aria-pressed")).toBe("true");
+    expect(cards()).toHaveLength(tiles().length);
+    expect(cards().length).toBeGreaterThan(0);
+    click(viewButton("Icons"));
+    expect(cards()).toHaveLength(0);
+    expect(tiles().length).toBeGreaterThan(0);
+  });
+
+  it("⌘⇧2 and ⌘⇧1 switch views", () => {
+    render(null, PREVIEW_NOTES);
+
+    expect(chord("@", "Digit2").defaultPrevented).toBe(true);
+    expect(cards().length).toBeGreaterThan(0);
+    expect(chord("!", "Digit1").defaultPrevented).toBe(true);
+    expect(cards()).toHaveLength(0);
+  });
+
+  it("the chords work from the filter box too", () => {
+    render(null, PREVIEW_NOTES);
+
+    expect(filterInput()).not.toBeNull();
+    chord("@", "Digit2", filterInput() ?? listbox());
+    expect(cards().length).toBeGreaterThan(0);
+  });
+
+  it("switching keeps the folder, the selection and the filter", () => {
+    render("research/alpha", PREVIEW_NOTES);
+    typeFilter("doc");
+    expect(selected()).toEqual(["Alpha doc"]);
+
+    click(viewButton("Preview"));
+
+    expect(crumbs()).toEqual(["Notes", "research"]);
+    expect(selected()).toEqual(["Alpha doc"]);
+    expect(filterInput()!.value).toBe("doc");
+    expect(labels()).toEqual(["Alpha doc", "Findings doc"]);
+  });
+});
+
+describe("Explorer: Preview cards", () => {
+  it("a note card shows its title and its snippet lines", () => {
+    render(null, PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    const card = tile("Scratch");
+    expect(card.textContent).toContain("line one");
+    expect(card.textContent).toContain("line five");
+  });
+
+  it("marks the current note's card", () => {
+    render("zeta", PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    expect(tile("Zeta").querySelector("[data-current-marker]")).not.toBeNull();
+    expect(tile("Scratch").querySelector("[data-current-marker]")).toBeNull();
+  });
+
+  it("a folder card shows its name, item count and first five entries", () => {
+    render(null, PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    const card = tile("research");
+    // deep/ plus eight notes
+    expect(card.textContent).toContain("9 items");
+    const entries = [...card.querySelectorAll("[data-folder-entry]")].map((e) => e.textContent);
+    expect(entries).toEqual(["deep", "Alpha doc", "Beta", "Gamma", "Delta"]);
+  });
+
+  it("a folder card with one item says '1 item'", () => {
+    render(null, PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    expect(tile("work").textContent).toContain("1 item");
+  });
+
+  it("selection, double click and ⏎ behave as in Icons", () => {
+    render(null, PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    click(tile("Zeta"));
+    expect(selected()).toEqual(["Zeta"]);
+    press("Enter");
+    expect(onOpen).toHaveBeenCalledWith("zeta");
+    dblclick("work");
+    expect(crumbs()).toEqual(["Notes", "work"]);
+  });
+
+  it("arrows move by the Preview grid's column count", () => {
+    threeColumns();
+    render(null, PREVIEW_NOTES);
+    click(viewButton("Preview"));
+
+    press("ArrowRight");
+    press("ArrowRight");
+    press("ArrowDown"); // research, work, Zeta / Scratch: index 1 + 3
+    expect(selected()).toEqual(["Scratch"]);
+    press("ArrowUp");
+    expect(selected()).toEqual(["research"]);
+  });
+});
+
+describe("Explorer: filter", () => {
+  it("narrows the current folder by title", () => {
+    render("research/alpha", PREVIEW_NOTES);
+
+    typeFilter("doc");
+
+    expect(labels()).toEqual(["Alpha doc", "Findings doc"]);
+  });
+
+  it("matches the filename as well as the title", () => {
+    render("work/plan", PREVIEW_NOTES);
+
+    typeFilter("plan"); // titled Roadmap, filed as plan.md
+
+    expect(labels()).toEqual(["Roadmap"]);
+  });
+
+  it("is case-insensitive and matches folder names", () => {
+    render(null, PREVIEW_NOTES);
+
+    typeFilter("RESEARCH");
+
+    expect(labels()).toEqual(["research"]);
+  });
+
+  it("covers the current folder only, not folders below it", () => {
+    render(null, PREVIEW_NOTES);
+
+    typeFilter("alpha"); // lives in research/, not at the top level
+
+    expect(labels()).toEqual([]);
+  });
+
+  it("clears on navigation", () => {
+    render(null, PREVIEW_NOTES);
+    typeFilter("res");
+    dblclick("research");
+
+    expect(filterInput()!.value).toBe("");
+    expect(labels().length).toBeGreaterThan(1);
+  });
+
+  it("status bar counts the filtered items", () => {
+    render(null, PREVIEW_NOTES);
+
+    typeFilter("zeta");
+
+    expect(container.querySelector('[role="status"]')!.textContent).toContain("1 item");
+  });
+
+  it("typing in the filter never triggers grid keys", () => {
+    render("research/alpha", PREVIEW_NOTES);
+    const input = filterInput();
+    expect(input).not.toBeNull();
+
+    for (const key of ["Backspace", "Enter", "ArrowRight", "ArrowDown"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      act(() => {
+        input!.dispatchEvent(event);
+      });
+      expect(event.defaultPrevented).toBe(false);
+    }
+
+    expect(crumbs()).toEqual(["Notes", "research"]);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(selected()).toEqual(["Alpha doc"]);
+  });
+});

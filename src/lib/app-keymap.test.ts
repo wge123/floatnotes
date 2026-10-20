@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  explorerViewChord,
   pushOverlay,
   removeOverlay,
   resolveChord,
@@ -141,5 +142,37 @@ describe("⌘O", () => {
   it("leaves a bare O and ⇧⌘O alone", () => {
     expect(resolveChord(0, { key: "o", metaKey: false })).toEqual({ kind: "none" });
     expect(resolveChord(0, chord(true))).toEqual({ kind: "none" });
+  });
+});
+
+describe("⌘⇧1 / ⌘⇧2 (Explorer view chords)", () => {
+  const chord = (key: string, code: string, extra = {}) => ({
+    key,
+    code,
+    metaKey: true,
+    shiftKey: true,
+    ...extra,
+  });
+
+  it("⌘⇧1 is Icons and ⌘⇧2 is Preview, by key or by physical digit", () => {
+    expect(explorerViewChord(chord("1", "Digit1"))).toBe("icons");
+    expect(explorerViewChord(chord("2", "Digit2"))).toBe("preview");
+    // macOS reports the shifted character for the key.
+    expect(explorerViewChord(chord("!", "Digit1"))).toBe("icons");
+    expect(explorerViewChord(chord("@", "Digit2"))).toBe("preview");
+  });
+
+  it("needs ⌘ and ⇧ together", () => {
+    expect(explorerViewChord(chord("1", "Digit1", { shiftKey: false }))).toBeNull();
+    expect(explorerViewChord(chord("1", "Digit1", { metaKey: false }))).toBeNull();
+    expect(explorerViewChord(chord("3", "Digit3"))).toBeNull();
+  });
+
+  it("is not an app-level command, so ⌘1–9 pinned jumps are untouched", () => {
+    expect(resolveChord(1, chord("1", "Digit1"))).toEqual({ kind: "none" });
+    expect(resolveChord(0, { key: "2", metaKey: true })).toEqual({
+      kind: "pinned-jump",
+      index: 1,
+    });
   });
 });

@@ -81,6 +81,24 @@ export function listFolder(
   ];
 }
 
+/**
+ * Narrow a folder's entries by a typed filter: a case-insensitive match on a
+ * note's title or filename, or a folder's name. Empty filter keeps everything.
+ */
+export function filterEntries(
+  entries: readonly ExplorerEntry[],
+  filter: string,
+): ExplorerEntry[] {
+  const needle = filter.trim().toLowerCase();
+  if (needle === "") return [...entries];
+  return entries.filter((e) =>
+    e.kind === "folder"
+      ? e.name.toLowerCase().includes(needle)
+      : e.note.title.toLowerCase().includes(needle) ||
+        `${baseName(e.note.id)}.md`.toLowerCase().includes(needle),
+  );
+}
+
 /** Folder navigation history (Finder-style back / forward). */
 export interface FolderHistory {
   stack: readonly string[];

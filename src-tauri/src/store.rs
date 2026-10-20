@@ -386,8 +386,8 @@ fn join_id(folder: &str, name: &str) -> String {
     }
 }
 
-const SNIPPET_LINES: usize = 3;
-const SNIPPET_MAX_CHARS: usize = 300;
+const SNIPPET_LINES: usize = 5;
+const SNIPPET_MAX_CHARS: usize = 400;
 
 /// The first few non-empty lines after the title line, joined by `\n` and
 /// cut to `SNIPPET_MAX_CHARS`.

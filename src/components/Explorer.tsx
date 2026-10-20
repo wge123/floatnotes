@@ -7,6 +7,7 @@ import {
   canGoBack,
   canGoForward,
   currentFolder,
+  filterEntries,
   folderKey,
   folderOfId,
   goBack,
@@ -21,6 +22,7 @@ import {
   type FolderHistory,
   type FolderNode,
 } from "../lib/explorer-model";
+import { explorerViewChord } from "../lib/app-keymap";
 import { trapTab } from "../lib/focus-trap";
 
 export interface ExplorerProps {
@@ -60,6 +62,11 @@ function PageIcon({ snippet }: { snippet: string }) {
   );
 }
 
+type ViewMode = "icons" | "preview";
+
+/** Entries of a folder a Preview card lists. */
+const CARD_LINES = 5;
+
 /**
  * ⌘O Explorer: a Finder-style window over the notes' folder structure.
  *
@@ -67,8 +74,8 @@ function PageIcon({ snippet }: { snippet: string }) {
  * expansion); the note list comes from the caller. Esc and the focus restore
  * are the app overlay stack's job, like every other overlay.
  *
- * Extension points for the view mode and filter (ticket 05): the toolbar's
- * trailing slot, and `renderTile`, which is the only place a tile is drawn.
+ * View mode (Icons | Preview) and the filter live in the toolbar's trailing
+ * slot; `renderTile` is the only place a tile is drawn, in either view.
  */
 export default function Explorer({
   notes,
@@ -87,11 +94,16 @@ export default function Explorer({
     () =>
       new Set(["", ...pathChain(currentNoteId ? folderOfId(currentNoteId) : "")]),
   );
+  const [view, setView] = useState<ViewMode>("icons");
+  const [filter, setFilter] = useState("");
   const gridRef = useRef<HTMLDivElement>(null);
 
   const folder = currentFolder(history);
   const tree = useMemo(() => buildFolderTree(list), [list]);
-  const entries = useMemo(() => listFolder(list, folder), [list, folder]);
+  const entries = useMemo(
+    () => filterEntries(listFolder(list, folder), filter),
+    [list, folder, filter],
+  );
   const selIndex = entries.findIndex((e) => e.key === selected);
   const selectedEntry = selIndex >= 0 ? entries[selIndex] : null;
 
@@ -110,6 +122,7 @@ export default function Explorer({
   /** Show `path`, as a new history stop; `select` picks the tile to land on. */
   const navigate = (path: string, select: string | null = null) => {
     setHistory((h) => visitFolder(h, path));
+    setFilter("");
     expand(path);
     setSelected(select);
     gridRef.current?.focus();
@@ -118,6 +131,7 @@ export default function Explorer({
     const next = to(history);
     if (next === history) return;
     setHistory(next);
+    setFilter("");
     expand(currentFolder(next));
     setSelected(null);
     gridRef.current?.focus();
@@ -140,6 +154,13 @@ export default function Explorer({
       event.preventDefault();
       return true;
     };
+
+    const viewChord = explorerViewChord(event);
+    if (viewChord) {
+      handled();
+      setView(viewChord);
+      return;
+    }
 
     if (event.metaKey) {
       // ⌘1–9 (pinned jump) and ⌘N are deliberately not here: the app keymap owns them.
@@ -185,21 +206,78 @@ export default function Explorer({
     const isSelected = entry.key === selected;
     const isCurrent = entry.kind === "note" && entry.note.id === currentNoteId;
     const label = entry.kind === "folder" ? entry.name : entry.note.title;
+    const labelClass = `rounded px-1 text-[10px] leading-tight ${
+      isSelected
+        ? "bg-blue-500 text-white"
+        : isCurrent
+          ? "font-medium text-blue-700"
+          : "text-gray-800"
+    }`;
+    const common = {
+      id: `explorer-tile-${index}`,
+      role: "option",
+      "aria-selected": isSelected,
+      title:
+        entry.kind === "folder"
+          ? entry.path
+          : `${entry.note.title}\n${noteFile(entry.note)}`,
+      onClick: () => setSelected(entry.key),
+      onDoubleClick: () => activate(entry),
+    };
+
+    if (view === "preview") {
+      const contents =
+        entry.kind === "folder" ? listFolder(list, entry.path) : [];
+      return (
+        <div
+          key={entry.key}
+          {...common}
+          data-preview-card
+          className={`flex h-32 flex-col gap-1 overflow-hidden rounded border bg-white p-2 ${
+            isSelected ? "border-blue-500 ring-1 ring-blue-500" : "border-gray-200"
+          }`}
+        >
+          <div className="flex items-center gap-1.5">
+            {entry.kind === "folder" && (
+              <span className="h-3.5 w-4 shrink-0">
+                <FolderIcon />
+              </span>
+            )}
+            <span data-tile-label className={`truncate font-medium ${labelClass}`}>
+              {label}
+            </span>
+            {isCurrent && (
+              <span
+                data-current-marker
+                title="Current note"
+                className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500"
+              />
+            )}
+          </div>
+          {entry.kind === "folder" ? (
+            <>
+              <span className="text-[9px] text-gray-500">
+                {contents.length === 1 ? "1 item" : `${contents.length} items`}
+              </span>
+              <ul className="min-h-0 space-y-px overflow-hidden text-[10px] text-gray-600">
+                {contents.slice(0, CARD_LINES).map((child) => (
+                  <li key={child.key} data-folder-entry className="truncate">
+                    {child.kind === "folder" ? child.name : child.note.title}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="line-clamp-5 whitespace-pre-wrap break-words text-[10px] leading-snug text-gray-500">
+              {entry.note.snippet}
+            </p>
+          )}
+        </div>
+      );
+    }
+
     return (
-      <div
-        key={entry.key}
-        id={`explorer-tile-${index}`}
-        role="option"
-        aria-selected={isSelected}
-        title={
-          entry.kind === "folder"
-            ? entry.path
-            : `${entry.note.title}\n${noteFile(entry.note)}`
-        }
-        onClick={() => setSelected(entry.key)}
-        onDoubleClick={() => activate(entry)}
-        className="flex flex-col items-center gap-1 rounded p-1"
-      >
+      <div key={entry.key} {...common} className="flex flex-col items-center gap-1 rounded p-1">
         <div
           className={`flex h-14 w-16 items-center justify-center rounded p-1 ${
             isSelected ? "bg-gray-200/70" : ""
@@ -213,13 +291,7 @@ export default function Explorer({
         </div>
         <span
           data-tile-label
-          className={`line-clamp-2 max-w-full break-all rounded px-1 text-center text-[10px] leading-tight ${
-            isSelected
-              ? "bg-blue-500 text-white"
-              : isCurrent
-                ? "font-medium text-blue-700"
-                : "text-gray-800"
-          }`}
+          className={`line-clamp-2 max-w-full break-all text-center ${labelClass}`}
         >
           {label}
         </span>
@@ -337,7 +409,39 @@ export default function Explorer({
               </span>
             ))}
           </nav>
-          {/* Trailing toolbar slot: view toggle and filter land here (ticket 05). */}
+          {/* Trailing toolbar slot: view toggle and filter. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <div role="group" aria-label="View" className="flex overflow-hidden rounded border border-gray-300">
+              {(["icons", "preview"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  data-view={mode === "icons" ? "Icons" : "Preview"}
+                  aria-pressed={view === mode}
+                  title={`${mode === "icons" ? "Icons" : "Preview"} (⌘⇧${mode === "icons" ? 1 : 2})`}
+                  onClick={() => {
+                    setView(mode);
+                    gridRef.current?.focus();
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] ${
+                    view === mode
+                      ? "bg-gray-200 text-gray-900"
+                      : "text-gray-600 hover:bg-gray-100 focus-visible:bg-gray-100"
+                  }`}
+                >
+                  {mode === "icons" ? "Icons" : "Preview"}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              aria-label="Filter"
+              placeholder="Filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="w-24 rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-800 placeholder:text-gray-400"
+            />
+          </div>
         </div>
         <div className="flex min-h-0 flex-1">
           <nav
@@ -361,7 +465,11 @@ export default function Explorer({
               onClick={(e) => {
                 if (e.target === e.currentTarget) setSelected(null);
               }}
-              className="floatnotes-focus-inset grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1 overflow-auto p-2"
+              className={`floatnotes-focus-inset grid min-h-0 flex-1 auto-rows-min overflow-auto p-2 ${
+                view === "preview"
+                  ? "grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2"
+                  : "grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1"
+              }`}
             >
               {entries.map(renderTile)}
             </div>

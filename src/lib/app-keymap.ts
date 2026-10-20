@@ -166,3 +166,22 @@ export function installAppKeymap(handlers: AppKeymapHandlers): () => void {
   window.addEventListener("keydown", onKeydown);
   return () => window.removeEventListener("keydown", onKeydown);
 }
+
+/**
+ * ⌘⇧1 / ⌘⇧2: the Explorer's Icons / Preview views. Not an app-level command
+ * (it only means something while the Explorer is open, and the Explorer owns
+ * the view), so `resolveChord` ignores it and the Explorer asks here.
+ * macOS reports the shifted character (`!`, `@`) as `key`, so the physical
+ * digit (`code`) counts too.
+ */
+export function explorerViewChord(chord: {
+  key: string;
+  code?: string;
+  metaKey: boolean;
+  shiftKey?: boolean;
+}): "icons" | "preview" | null {
+  if (!chord.metaKey || !chord.shiftKey) return null;
+  if (chord.key === "1" || chord.key === "!" || chord.code === "Digit1") return "icons";
+  if (chord.key === "2" || chord.key === "@" || chord.code === "Digit2") return "preview";
+  return null;
+}

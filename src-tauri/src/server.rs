@@ -1126,7 +1126,7 @@ mod tests {
     async fn list_includes_notes_at_any_depth_with_folder_and_snippet() {
         let (tmp, _store, app) = test_app();
         write_note(tmp.path(), "top.md", "# Top\nbody");
-        write_note(tmp.path(), "research/findings.md", "# Findings\n\none\n\ntwo\nthree\nfour\n");
+        write_note(tmp.path(), "research/findings.md", "# Findings\n\none\n\ntwo\nthree\nfour\nfive\nsix\n");
         write_note(tmp.path(), "a/b/c/deep.md", "# Deep");
 
         let (status, list) = call(&app, "GET", "/api/notes", None).await;
@@ -1144,8 +1144,8 @@ mod tests {
         assert_eq!(find("research/findings")["folder"], "research");
         assert_eq!(find("research/findings")["title"], "Findings");
         assert_eq!(find("a/b/c/deep")["folder"], "a/b/c");
-        // First few non-empty lines after the title, bounded.
-        assert_eq!(find("research/findings")["snippet"], "one\ntwo\nthree");
+        // First five non-empty lines after the title, bounded.
+        assert_eq!(find("research/findings")["snippet"], "one\ntwo\nthree\nfour\nfive");
         assert_eq!(find("top")["snippet"], "body");
         assert_eq!(find("a/b/c/deep")["snippet"], "");
     }

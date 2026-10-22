@@ -71,11 +71,7 @@ describe("FORMAT_COMMANDS", () => {
 
   // Regression: markdown has no underline syntax; with Markdown html:false the
   // mark was silently dropped on save. html:true round-trips it as <u>.
-  //
-  // it.fails: TipTap 3 writes underline as `++word++`, which no other markdown
-  // reader understands. Underline's spelling is ticket 05's (todo f9134a04);
-  // flip this back to `it` there.
-  it.fails("underline round-trips through markdown as <u>", () => {
+  it("underline round-trips through markdown as <u>", () => {
     const ed = createEditor("word");
     ed.commands.setTextSelection({ from: 1, to: 5 });
     command("underline").run(ed);

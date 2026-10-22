@@ -4,6 +4,7 @@ import { TaskItem } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
+import { Marked, type marked } from "marked";
 import StarterKit from "@tiptap/starter-kit";
 
 import { type FrontMatter, splitFrontMatter } from "./front-matter";
@@ -61,7 +62,11 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     TableKit.configure({ table: false }),
     NoteTable.configure({ resizable: false }),
     Placeholder.configure({ placeholder }),
-    Markdown,
+    // A private marked instance per editor. The default is one shared global
+    // that every editor registers its tokenizers into, so each editor built in
+    // a process made the next one slower (60 editors: 80ms to 500ms for a 90KB
+    // note) and kept every earlier editor's tokenizers alive.
+    Markdown.configure({ marked: new Marked() as unknown as typeof marked }),
     Search, // literal-text find; classes styled in App.css
     // Decoration-only, so position in this list is free: it reads the selection
     // and draws widgets, and hooks no other extension's rules. ADR 0005's

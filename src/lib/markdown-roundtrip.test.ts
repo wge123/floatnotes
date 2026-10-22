@@ -186,7 +186,7 @@ describe("markdown tables", () => {
   // it.fails: TipTap 3 parses the table and flattens the colspan into pipe
   // syntax (text kept, merged cell lost) instead of keeping the HTML. Raw HTML
   // blocks are ticket 07's (todo f9134a04); flip this back to `it` there.
-  it.fails("leaves pasted colspan HTML as HTML instead of mangling it", () => {
+  it("leaves pasted colspan HTML as HTML instead of mangling it", () => {
     const html =
       '<table><tbody><tr><td colspan="2">wide</td></tr>' +
       "<tr><td>a</td><td>b</td></tr></tbody></table>";

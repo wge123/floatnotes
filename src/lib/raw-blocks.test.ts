@@ -164,7 +164,7 @@ describe("read-only and whole-block handling (stories 8, 9)", () => {
       editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 0)),
     );
     const handled = editor.view.someProp("handleTextInput", (f) =>
-      f(editor.view, 0, 1, "x"),
+      f(editor.view, 0, 1, "x", () => editor.state.tr),
     );
     expect(handled).toBe(true);
     expect(saveNote(editor)).toBe("<div>hi</div>\n\nafter");

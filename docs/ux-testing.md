@@ -98,6 +98,27 @@ Added by the 2026-07-30 UI/UX audit — surfaces a browser can never reach
 - **⌥N while an overlay is open** — the global shortcut and the overlay stack's
   Esc layering are owned by different layers; only the native panel exercises both.
 
+## Corpus check (before an editor change ships)
+
+ADR 0017's guard: it loads and saves a copy of every real note through the
+production extension list (`loadNote`/`saveNote`, headless jsdom editor) and
+reports each note the save would change. Read-only on the input directory.
+
+```
+CORPUS_NOTES_DIR=~/Notes bun run corpus-check
+CORPUS_NOTES_DIR=~/Notes CORPUS_REPORT=/tmp/corpus.txt bun run corpus-check   # also write the report to a file
+```
+
+Classes: **unchanged** (same bytes), **restyle** (bytes differ, text, links,
+images, hard line breaks and front matter equal), **content lost** (any of
+those differ). Non-convergent notes (saving the saved note changes it again)
+are flagged separately. Exit code is non-zero when any note is content lost
+or errors. The definition of "content" is in the header of
+`scripts/corpus-check/corpus-check.corpus.ts`; the classifier is
+`src/lib/corpus-classify.ts`. Run it on the old editor first, then after the
+upgrade, and compare. The output is never committed. It runs under
+`vitest.corpus.config.ts` and is not part of `bunx vitest run`.
+
 ## Cadence
 
 - **Per-change**: L1 + the L2 flows touching the changed area.

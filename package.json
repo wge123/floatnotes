@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "corpus-check": "vitest run --config vitest.corpus.config.ts",
     "tauri": "tauri",
     "app:install": "tauri build && (osascript -e 'quit app \"FloatNotes\"' 2>/dev/null || true) && rm -rf /Applications/FloatNotes.app && cp -R src-tauri/target/release/bundle/macos/FloatNotes.app /Applications/ && open /Applications/FloatNotes.app"
   },

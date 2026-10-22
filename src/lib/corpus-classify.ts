@@ -31,16 +31,22 @@ const sorted = (xs: string[]) => [...xs].sort();
 const sameMultiset = (a: string[], b: string[]) =>
   JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
 
-const clip = (s: string, n = 60) => (s.length > n ? s.slice(0, n) + "…" : s);
+/** Clip around the first character where the lines differ. */
+const around = (s: string, at: number) =>
+  (at > 20 ? "…" : "") + s.slice(Math.max(0, at - 20), at + 40) + (s.length > at + 40 ? "…" : "");
 
-/** First line (1-based) where two texts differ, with both lines clipped. */
+/** First line (1-based) where two texts differ, showing the differing spot. */
 export function firstDifference(a: string, b: string): string {
   const la = a.split("\n");
   const lb = b.split("\n");
   const n = Math.max(la.length, lb.length);
   for (let i = 0; i < n; i++) {
-    if (la[i] !== lb[i]) {
-      return `line ${i + 1}: ${JSON.stringify(clip(la[i] ?? "(none)"))} -> ${JSON.stringify(clip(lb[i] ?? "(none)"))}`;
+    const x = la[i] ?? "(none)";
+    const y = lb[i] ?? "(none)";
+    if (x !== y) {
+      let at = 0;
+      while (at < x.length && at < y.length && x[at] === y[at]) at++;
+      return `line ${i + 1}: ${JSON.stringify(around(x, at))} -> ${JSON.stringify(around(y, at))}`;
     }
   }
   return "no differing line";

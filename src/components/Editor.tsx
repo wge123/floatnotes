@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   EditorContent,
   useEditor,
@@ -7,9 +7,12 @@ import {
 
 import {
   buildEditorExtensions,
+  loadNote,
   saveNote,
 } from "../lib/editor-extensions";
 import { shouldApplyExternal } from "../lib/external-sync";
+import { type FrontMatter, withYaml } from "../lib/front-matter";
+import PropertiesStrip from "./PropertiesStrip";
 
 export interface EditorProps {
   /** Markdown source of truth (a note's .md content). */
@@ -32,27 +35,50 @@ export default function Editor({
   onReady,
   placeholder,
 }: EditorProps) {
+  // Front matter is split off here and written back unchanged on every save
+  // (ADR 0018). The ref is what handlers read; the state re-renders the strip.
+  const [loaded] = useState(() => loadNote(value));
+  const frontMatterRef = useRef<FrontMatter | null>(loaded.frontMatter);
+  const [frontMatter, setFrontMatter] = useState(loaded.frontMatter);
+
   const editor = useEditor({
     extensions: buildEditorExtensions(placeholder),
-    content: value,
+    content: loaded.content,
     onCreate: ({ editor }) => onReady?.(editor),
-    onUpdate: ({ editor }) => onChange(saveNote(editor)),
+    onUpdate: ({ editor }) =>
+      onChange(saveNote(editor, frontMatterRef.current)),
   });
 
   // External value changes (file watcher, note switch) — guarded so the echo
   // of our own onChange never resets the caret mid-typing.
   useEffect(() => {
     if (!editor) return;
-    const current = saveNote(editor);
+    const current = saveNote(editor, frontMatterRef.current);
     if (shouldApplyExternal(current, value)) {
-      editor.commands.setContent(value, false);
+      const next = loadNote(value);
+      frontMatterRef.current = next.frontMatter;
+      setFrontMatter(next.frontMatter);
+      editor.commands.setContent(next.content, false);
     }
   }, [editor, value]);
 
+  const editYaml = (yaml: string) => {
+    if (!editor || !frontMatterRef.current) return;
+    const next = withYaml(frontMatterRef.current, yaml);
+    frontMatterRef.current = next;
+    setFrontMatter(next);
+    onChange(saveNote(editor, next));
+  };
+
   return (
-    <EditorContent
-      editor={editor}
-      className="floatnotes-editor prose prose-sm max-w-none"
-    />
+    <>
+      {frontMatter && (
+        <PropertiesStrip yaml={frontMatter.yaml} onChange={editYaml} />
+      )}
+      <EditorContent
+        editor={editor}
+        className="floatnotes-editor prose prose-sm max-w-none"
+      />
+    </>
   );
 }

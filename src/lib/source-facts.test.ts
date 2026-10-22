@@ -11,6 +11,29 @@ describe("sourceFacts", () => {
     ]);
   });
 
+  // GFM cuts a table cell at every pipe that is not escaped, code span or not,
+  // and drops the cells past the header's width. The editor keeps the whole
+  // cell, so the original is read as if the pipe in the span were escaped.
+  it("reads a pipe inside a code span in a table cell like an escaped one", () => {
+    const plain = "| a | b |\n|---|---|\n| x | `rg 'p|q' dir` returns nothing. |";
+    const escaped = "| a | b |\n|---|---|\n| x | `rg 'p\\|q' dir` returns nothing. |";
+    expect(sourceFacts(plain).words).toEqual(sourceFacts(escaped).words);
+    expect(sourceFacts(plain).words).toContain("nothing.");
+  });
+
+  it("leaves an escaped pipe in a table cell as it is", () => {
+    const escaped = "| a | b |\n|---|---|\n| x | `p\\|q` |";
+    expect(sourceFacts(escaped).words).toEqual(["a", "b", "x", "p|q"]);
+  });
+
+  // marked reads `1.` alone at the end of a file as an empty item but `1. `
+  // (the same line with the trailing space a save writes) as a paragraph "1.".
+  it("reads an empty list item the same with or without its trailing space", () => {
+    expect(sourceFacts("### Top\n\n1.").words).toEqual(["Top"]);
+    expect(sourceFacts("### Top\n\n1. ").words).toEqual(["Top"]);
+    expect(sourceFacts("### Top\n\n- ").words).toEqual(["Top"]);
+  });
+
   it("joins words that markup splits mid-word, and splits at soft and hard breaks", () => {
     expect(sourceFacts("un**believ**able").words).toEqual(["unbelievable"]);
     expect(sourceFacts("a  \nb").words).toEqual(["a", "b"]);

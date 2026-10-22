@@ -57,6 +57,18 @@ describe("saves keep today's spelling", () => {
     ed.destroy();
   });
 
+  it("keeps ++ for underlined text that <u> would read back as raw HTML", () => {
+    // `<u>` content is raw HTML on load, so an escape inside it would come
+    // back as a literal backslash and grow on every save.
+    const source = "CAM++ (a, ~7.2M) x. then CAM++ (b)";
+    const once = roundTrip(source);
+    expect(once).toBe("CAM++(a, ~7.2M) x. then CAM++ (b)");
+    expect(roundTrip(once)).toBe(once);
+    const starred = roundTrip("x ++snake_case and *star*++ y");
+    expect(starred).toContain("++");
+    expect(roundTrip(starred)).toBe(starred);
+  });
+
   it.each([
     ["<https://example.com>", "<https://example.com>"],
     ["https://example.com", "<https://example.com>"],

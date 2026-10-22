@@ -29,6 +29,14 @@ or further down. A directory with no notes anywhere below it is not a folder
 and never appears; nor does any dot-directory (`.trash`).
 _Avoid_: directory (for the user-facing concept)
 
+### Front matter
+
+A YAML block fenced by `---` lines at the very top of a note, written by other
+tools. It is not part of the editable document: the panel shows it in a
+collapsed **properties strip** above the text and writes it back exactly as
+left. See ADR 0018.
+_Avoid_: frontmatter, metadata, properties (for the YAML itself)
+
 ### Keyboard reachability
 
 Whether every interactive control can be reached, operated, and left using only
@@ -54,8 +62,10 @@ while a note is pinned. Pin and unpin from ⌘K.
 ### Note
 
 One plain UTF-8 `.md` file anywhere under `~/Notes` (override
-`FLOATNOTES_DIR`), at any folder depth. The file IS the note — no frontmatter,
-no database row. Title = first non-empty line (leading `#` stripped). A note's
+`FLOATNOTES_DIR`), at any folder depth. The file IS the note — no database
+row. A note may open with **front matter**, which FloatNotes keeps but never
+needs. Title = first non-empty line after any front matter (leading `#`
+stripped). A note's
 id is its path under the notes directory without `.md`
 (`research/findings`); a top-level note's id is just its filename slug
 (ADR 0016). Files that are not `.md` are not notes.
@@ -73,6 +83,14 @@ reading the whole notes corpus cross-origin and accepting `POST` / `DELETE`.
 Relying on it is what let `Access-Control-Allow-Origin: *` look safe for as long
 as it did. The server now runs an origin allowlist instead (`server.rs`
 `allowed_origins`), which does not depend on browser behaviour. See ADR 0007.
+
+### Raw block
+
+A piece of a note the editor cannot represent (raw HTML such as `<details>`,
+an HTML comment, a footnote), shown read-only as its original text and saved
+byte for byte. It can be moved or deleted whole, never edited inside the
+panel. See ADR 0018.
+_Avoid_: HTML block, opaque node, passthrough
 
 ### Sidecar
 

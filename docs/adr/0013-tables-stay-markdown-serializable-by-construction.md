@@ -1,6 +1,6 @@
 # ADR 0013: Tables stay markdown-serializable by construction
 
-- Status: Accepted
+- Status: Accepted; Enter rule and alignment consequence superseded by ADR 0019
 - Date: 2026-08-03
 
 ## Context

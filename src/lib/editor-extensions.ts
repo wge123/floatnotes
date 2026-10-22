@@ -8,7 +8,7 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
-import { EmptyTaskList } from "./empty-task-parse";
+import { EmptyTaskList } from "./empty-task-list";
 import { LinkClick } from "./link-click";
 import { MarkdownPaste } from "./markdown-paste";
 import { RevealMarkers } from "./reveal-markers";

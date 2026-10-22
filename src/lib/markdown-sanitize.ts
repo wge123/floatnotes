@@ -15,7 +15,7 @@ import { MarkdownManager } from "@tiptap/markdown";
  * - inline nodes sitting directly in a block container (a table cell, quote,
  *   item or the document itself) instead of inside a paragraph
  */
-const INLINE = new Set(["text", "image", "hardBreak"]);
+const INLINE = new Set(["text", "image", "hardBreak", "rawInline"]);
 const CONTAINERS = new Set([
   "doc",
   "blockquote",

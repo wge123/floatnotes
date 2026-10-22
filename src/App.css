@@ -210,3 +210,44 @@ body {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* Raw blocks (lib/raw-blocks.ts, ADR 0018): HTML, comments and footnotes the
+   editor cannot represent, shown read-only as their source. prose paints `pre`
+   as a dark code block, so the look is set explicitly: grey on light grey, the
+   same family as the table header. Text colour is gray-600 on gray-100
+   (about 6:1, WCAG 1.4.3 AA). */
+.floatnotes-editor .raw-block {
+  margin: 0.75rem 0;
+  cursor: default;
+}
+
+.floatnotes-editor .raw-block > pre {
+  margin: 0;
+  padding: 0.375rem 0.625rem;
+  background: #f3f4f6; /* gray-100 */
+  color: #4b5563; /* gray-600 */
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.floatnotes-editor .raw-inline {
+  background: #f3f4f6; /* gray-100 */
+  color: #4b5563; /* gray-600 */
+  border-radius: 0.25rem;
+  padding: 0 0.2em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  cursor: default;
+}
+
+/* The selected state is what "delete or move as a whole" hangs on, so it must
+   be visible without relying on colour alone. */
+.floatnotes-editor .raw-block.ProseMirror-selectednode,
+.floatnotes-editor .raw-inline.ProseMirror-selectednode {
+  outline: 2px solid rgb(37 99 235); /* blue-600 */
+  outline-offset: 1px;
+}

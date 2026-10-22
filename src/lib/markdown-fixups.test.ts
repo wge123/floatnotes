@@ -37,10 +37,12 @@ describe("a linked image (README badge)", () => {
     expect(roundTrip(once)).toBe(once);
   });
 
+  // Raw blocks (ADR 0018, todo 2d04819c): HTML is kept as written rather than
+  // converted to markdown, so the link and every attribute survive.
   it("keeps the link when the badge is written as HTML", () => {
-    expect(
-      roundTrip('<a href="https://pypi.example/p/"><img src="https://img.example/p.svg" alt="PyPI"></a>'),
-    ).toBe(badge);
+    const html =
+      '<a href="https://pypi.example/p/"><img src="https://img.example/p.svg" alt="PyPI"></a>';
+    expect(roundTrip(html)).toBe(html);
   });
 });
 

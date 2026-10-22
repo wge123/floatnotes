@@ -189,8 +189,10 @@ describe("read-only and whole-block handling (stories 8, 9)", () => {
     expect(editor.schema.nodes.rawBlock.isAtom).toBe(true);
   });
 
-  it("leaves a place to put the caret after a final block", () => {
+  it("leaves a place to put the caret after a final block", async () => {
     open("before\n\n<div>hi</div>");
+    // The trailing paragraph is appended on the editor's create tick.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
     const end = editor.state.doc.content.size;
     editor.view.dispatch(

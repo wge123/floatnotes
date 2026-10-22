@@ -91,8 +91,13 @@ describe.each(cases)("saving %s", (name, source) => {
     const { editor, frontMatter } = createEditor(source);
     const untouched = saveNote(editor, frontMatter);
     // Inside the last textblock: content.size is past the last block, where
-    // an insert opens a new paragraph instead of typing.
-    const end = Selection.atEnd(editor.state.doc).from;
+    // an insert opens a new paragraph instead of typing. (Not
+    // Selection.atEnd: a note ending in a raw block has no textblock at its
+    // end, and atEnd would land before the atom.)
+    let end = 1;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isTextblock) end = pos + node.nodeSize - 1;
+    });
     editor.chain().insertContentAt(end, "x").run();
     editor.chain().deleteRange({ from: end, to: end + 1 }).run();
     expect(saveNote(editor, frontMatter)).toBe(untouched);

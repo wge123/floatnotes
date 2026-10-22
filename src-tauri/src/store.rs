@@ -1,8 +1,10 @@
 //! Plain-`.md` note store (contract: parent plan, step S03).
 //!
 //! - Notes are individual `.md` files in the notes dir (`~/Notes`, env
-//!   `FLOATNOTES_DIR`). No frontmatter — the note IS the markdown.
-//! - title = first non-empty line, leading `#`s stripped.
+//!   `FLOATNOTES_DIR`). The note IS the markdown; it may start with a YAML
+//!   front-matter block (ADR 0018), which the store leaves alone.
+//! - title = first non-empty line after any front matter, leading `#`s
+//!   stripped.
 //! - filename = slug of the creation title + short random suffix; stable after
 //!   creation (updates never rename).
 //! - Writes are atomic (temp file + rename into place).
@@ -418,10 +420,34 @@ fn write_and_sync(path: &Path, content: &str) -> io::Result<()> {
     file.sync_all()
 }
 
-/// title = first non-empty line, leading `#`s stripped. Lines that are empty
-/// after stripping (e.g. a bare `###`) don't count as a title.
-pub fn derive_title(content: &str) -> String {
+/// The note text after a leading front-matter block: the first line is exactly
+/// `---` and a later line is exactly `---` (a trailing `\r` is tolerated). A
+/// missing closing fence, or a `---` anywhere but line one, is not front
+/// matter and the text comes back whole. Mirrors `src/lib/front-matter.ts`.
+fn skip_front_matter(content: &str) -> &str {
+    let fence = |l: &str| l.trim_end_matches('\n').trim_end_matches('\r') == "---";
+    let mut lines = content.split_inclusive('\n');
+    let Some(first) = lines.next() else {
+        return content;
+    };
+    if !fence(first) {
+        return content;
+    }
+    let mut consumed = first.len();
+    for line in lines {
+        consumed += line.len();
+        if fence(line) {
+            return &content[consumed..];
+        }
+    }
     content
+}
+
+/// title = first non-empty line after any front matter, leading `#`s
+/// stripped. Lines that are empty after stripping (e.g. a bare `###`) don't
+/// count as a title; a note with nothing else is "Untitled".
+pub fn derive_title(content: &str) -> String {
+    skip_front_matter(content)
         .lines()
         .map(|l| l.trim().trim_start_matches('#').trim())
         .find(|l| !l.is_empty())
@@ -452,7 +478,7 @@ const SNIPPET_MAX_CHARS: usize = 400;
 /// The first few non-empty lines after the title line, joined by `\n` and
 /// cut to `SNIPPET_MAX_CHARS`.
 pub fn derive_snippet(content: &str) -> String {
-    let joined = content
+    let joined = skip_front_matter(content)
         .lines()
         .map(str::trim)
         .filter(|l| !l.trim_start_matches('#').trim().is_empty())

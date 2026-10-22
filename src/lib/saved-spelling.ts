@@ -1,4 +1,4 @@
-import type { Editor, JSONContent } from "@tiptap/core";
+import { Extension, type Editor, type JSONContent } from "@tiptap/core";
 import { Underline } from "@tiptap/extension-underline";
 
 import { NoteLink } from "./markdown-fixups";
@@ -8,6 +8,29 @@ import { callParent } from "./parent-renderer";
  * Spellings a save keeps from before TipTap 3 (ADR 0019), because other tools
  * read these notes: nvim, Obsidian-style wikilinks, GitHub.
  */
+
+/**
+ * `[[Note]]` is a wikilink, plain text to this editor. marked reads the inner
+ * `[Note]` as a reference link whenever the note defines `[Note]: url`, which
+ * left `[` + a link + `]` on load. This tokenizer claims the whole `[[…]]`
+ * first, so the lexer never gets to read it as a link, and it comes through as
+ * the text it is. (On save, `cleanEscapes` then proves the brackets need no
+ * backslashes, because the parse of `[[Note]]` is that same text.)
+ */
+export const WikiLinkText = Extension.create({
+  name: "wikiLinkText",
+  markdownTokenName: "wikiLinkText",
+  markdownTokenizer: {
+    name: "wikiLinkText",
+    level: "inline",
+    start: (src: string) => src.indexOf("[["),
+    tokenize(src: string) {
+      const raw = /^\[\[[^[\]\n]+\]\](?![(\[])/.exec(src)?.[0];
+      return raw ? { type: "wikiLinkText", raw, text: raw } : undefined;
+    },
+  },
+  parseMarkdown: (token: { text?: string }) => ({ type: "text", text: token.text ?? "" }),
+});
 
 /**
  * Underline is written `<u>…</u>`; `++…++` still parses (the stock tokenizer).

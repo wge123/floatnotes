@@ -25,7 +25,7 @@ import {
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
 import { RawBlock, RawInline } from "./raw-blocks";
-import { NoteUnderline, SpelledLink, spellMarks, cleanEscapes } from "./saved-spelling";
+import { NoteUnderline, SpelledLink, WikiLinkText, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -83,6 +83,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteTable.configure({ resizable: false }),
     RawBlock,
     RawInline,
+    WikiLinkText,
     Placeholder.configure({ placeholder }),
     // A private marked instance per editor. The default is one shared global
     // that every editor registers its tokenizers into, so each editor built in

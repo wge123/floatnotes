@@ -133,7 +133,7 @@ export const NoteListItem = ListItem.extend({
 
 const orderedBase = OrderedList.config.markdownTokenizer!;
 // Cheap test of the first line, so a long note is not re-split at every block.
-const ORDERED_FIRST_LINE = /^[ \t]*[0-9a-zA-Z]{1,6}[.)][ \t]+/;
+const ORDERED_FIRST_LINE = /^[ \t]*[0-9]{1,9}[.)][ \t]+/;
 
 /**
  * TipTap 3's numbered-list tokenizer takes an item's text to start
@@ -149,7 +149,18 @@ export const NoteOrderedList = OrderedList.extend({
     tokenize(src, tokens, lexer) {
       if (!ORDERED_FIRST_LINE.test(src)) return undefined;
       const base = /^[ \t]*/.exec(src)![0].length;
-      const lines = src.split("\n");
+      const all = src.split("\n");
+      // The list ends at the first non-blank line at its own indentation that
+      // does not start with a digit marker: the stock tokenizer would take
+      // `No. text` or `Mr. Smith` there as a lettered item.
+      const end = all.findIndex(
+        (line, i) =>
+          i > 0 &&
+          line.trim() !== "" &&
+          /^[ \t]*/.exec(line)![0].length <= base &&
+          !ORDERED_FIRST_LINE.test(line),
+      );
+      const lines = end < 0 ? all : all.slice(0, end);
       const shifted = lines.map((line) => {
         const lead = /^ */.exec(line)![0].length;
         return lead >= base + 2 && line.trim() !== "" ? line.slice(1) : line;

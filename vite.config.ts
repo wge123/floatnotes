@@ -30,8 +30,10 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore watching `src-tauri`, and agent worktrees: they
+      // hold full copies of the app, so an agent's edit there reloaded (and
+      // once ended) the dev session running from the main checkout.
+      ignored: ["**/src-tauri/**", "**/.claude/worktrees/**"],
     },
   },
 }));

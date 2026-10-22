@@ -4,6 +4,8 @@
  * after, it says whether the save changed nothing, only restyled, or lost
  * content. See scripts/corpus-check/corpus-check.corpus.ts for how facts are read.
  */
+import type { SourceFacts } from "./source-facts";
+
 export type NoteClass = "unchanged" | "restyle" | "content lost";
 
 export interface NoteFacts {
@@ -58,6 +60,9 @@ export function classifyNote(input: {
   resaved: string;
   before: NoteFacts;
   after: NoteFacts;
+  /** Facts read from the text, not the editor; see source-facts.ts. */
+  sourceBefore?: SourceFacts;
+  sourceAfter?: SourceFacts;
 }): Classification {
   const { original, saved, resaved, before, after } = input;
   const nonConvergent = resaved !== saved;

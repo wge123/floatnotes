@@ -103,8 +103,13 @@ function readFacts(editor: Editor, fm: FrontMatter | null): NoteFacts {
     ) {
       hardBreaks++;
     }
+    // A link on whitespace alone (the gap between two linked badges in an
+    // HTML row) shows nothing to click, and markdown has no way to write it.
+    const blank = node.isText && (node.text ?? "").trim() === "";
     for (const m of node.marks) {
-      if (m.type.name === "link") links.push(String(m.attrs.href ?? ""));
+      if (m.type.name === "link" && !blank) {
+        links.push(String(m.attrs.href ?? ""));
+      }
     }
   });
   // Blocks stay on their own lines; inside a block every whitespace run,

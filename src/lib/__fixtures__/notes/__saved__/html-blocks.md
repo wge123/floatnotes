@@ -12,6 +12,6 @@ Hidden **markdown** inside details.
 
 ![](diagram.png)
 
-Inline **strong**, a [link](https://example.com), and a break  
+Inline **strong**, a [link](https://example.com), and a break\
 after it.
 

@@ -1,6 +1,5 @@
 import { Search } from "./search-extension";
 import type { Editor } from "@tiptap/core";
-import Image from "@tiptap/extension-image";
 import { TaskItem } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
@@ -12,6 +11,8 @@ import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskList } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
 import { RevealMarkers } from "./reveal-markers";
+import { NoteHardBreak } from "./hard-break-markdown";
+import { NoteImage, NoteLink, NoteListItem, prepareForSave } from "./markdown-fixups";
 import { NoteTable } from "./table-markdown";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
@@ -35,15 +36,20 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     // would otherwise add unwrapped.
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
-      link: { openOnClick: false, autolink: true },
+      link: false,
       trailingNode: false,
+      hardBreak: false,
+      listItem: false,
     }),
     TrailingParagraph,
+    NoteHardBreak,
+    NoteListItem,
+    NoteLink.configure({ openOnClick: false, autolink: true }),
     // Inline so an image stays inside its sentence instead of splitting the
     // paragraph around it. The src is kept as written; a relative path does
     // not resolve in the webview yet, so the image shows as broken but its
     // markdown survives.
-    Image.configure({ inline: true }),
+    NoteImage.configure({ inline: true }),
     LinkClick,
     EmptyTaskList,
     TaskItem.configure({ nested: true }),
@@ -84,6 +90,8 @@ export function saveNote(
   editor: Editor,
   frontMatter: FrontMatter | null = null,
 ): string {
-  const body = editor.markdown!.serialize(getSerializationDocument(editor).toJSON());
+  const body = editor.markdown!.serialize(
+    prepareForSave(getSerializationDocument(editor).toJSON()),
+  );
   return (frontMatter?.raw ?? "") + body;
 }

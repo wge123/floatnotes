@@ -23,6 +23,11 @@ export const EmptyTaskList = TaskList.extend({
       return TASK_START.test(src) ? 0 : -1;
     },
     tokenize(src, tokens, lexer) {
+      // The lexer offers every block position the whole remaining source, and
+      // the stock tokenizer splits all of it into lines before it can say no.
+      // Over a long note that is quadratic, so refuse early unless this
+      // position really starts a task item.
+      if (!TASK_START.test(src)) return undefined;
       const lines = src.split("\n");
       if (!lines.some((line) => BARE_TASK_LINE.test(line))) {
         return base.tokenize(src, tokens, lexer);

@@ -52,6 +52,40 @@ export function matchFootnoteDefinition(src: string): string | null {
   return end < lines.length ? `${consumed}\n` : consumed;
 }
 
+const COMPONENT_OPEN = /^ {0,3}<([A-Z][A-Za-z0-9]*)(?:\s[^<>]*)?>[ \t]*$/;
+
+/**
+ * A component element, as MDX docs pages write them: an opening tag alone on
+ * its line, `<Tabs>` or `<Tab title="x">`, with a capital letter (HTML tags are
+ * lowercase), through its matching closing tag, blank lines and indented
+ * content included. The stock HTML block ends at the first blank line, so the
+ * content after it read as indented code (and a fence inside it went wrong on
+ * save). Same-name tags nest. Returns the consumed source, or null when the
+ * opening tag is self-closed or never closed.
+ */
+export function matchComponentBlock(src: string): string | null {
+  // The lexer offers every block position the whole rest of the note: test the
+  // first line before splitting the rest.
+  const eol = src.indexOf("\n");
+  const open = COMPONENT_OPEN.exec(eol < 0 ? src : src.slice(0, eol));
+  if (!open) return null;
+  const lines = src.split("\n");
+  if (lines[0].trimEnd().endsWith("/>")) return null;
+  const name = open[1];
+  const opens = new RegExp(`<${name}(?=[\\s>/])[^<>]*?(/?)>`, "g");
+  const closes = new RegExp(`</${name}\\s*>`, "g");
+  let depth = 0;
+  for (let i = 0; i < lines.length; i++) {
+    for (const m of lines[i].matchAll(opens)) if (m[1] !== "/") depth++;
+    depth -= [...lines[i].matchAll(closes)].length;
+    if (depth <= 0) {
+      const consumed = lines.slice(0, i + 1).join("\n");
+      return i + 1 < lines.length ? `${consumed}\n` : consumed;
+    }
+  }
+  return null;
+}
+
 function rawSource(value: unknown): string {
   if (typeof value !== "string") {
     throw new TypeError(`raw block value must be a string, got ${typeof value}`);
@@ -89,15 +123,16 @@ export const RawBlock = Node.create({
     return { value: { default: "", rendered: false } };
   },
 
-  // Block HTML and the footnote tokenizer below both produce `html` tokens.
+  // Block HTML and the tokenizer below (footnote definitions, component
+  // elements) both produce `html` tokens.
   markdownTokenName: "html",
 
   markdownTokenizer: {
-    name: "footnoteDefinition",
+    name: "footnoteOrComponent",
     level: "block",
     start: (src: string) => src.search(/\n {0,3}\[\^[^\]\s]+\]:/),
     tokenize(src) {
-      const raw = matchFootnoteDefinition(src);
+      const raw = matchFootnoteDefinition(src) ?? matchComponentBlock(src);
       if (!raw) return undefined;
       return { type: "html", raw, text: raw, block: true };
     },

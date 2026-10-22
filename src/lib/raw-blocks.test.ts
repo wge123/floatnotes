@@ -202,6 +202,14 @@ describe("read-only and whole-block handling (stories 8, 9)", () => {
   });
 });
 
+describe("a corrupt raw node", () => {
+  it("fails the save instead of writing nothing", () => {
+    open("x");
+    const doc = { type: "doc", content: [{ type: "rawBlock", attrs: { value: null } }] };
+    expect(() => editor.markdown!.serialize(doc)).toThrow(/raw block value/);
+  });
+});
+
 describe("converges", () => {
   it("is stable on a second save", () => {
     const note = `<!-- c -->\n\n# T\n\n${DETAILS}\n\nText <kbd>k</kbd>[^1]\n\n[^1]: def`;

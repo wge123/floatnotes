@@ -59,7 +59,7 @@ describe("sourceFacts", () => {
     const f = sourceFacts("a<br>b <u>x</u>");
     expect(f.rawSources).toEqual([]);
     expect(f.hardBreaks).toBe(1);
-    expect(f.words).toEqual(["ab", "x"]);
+    expect(f.words).toEqual(["a", "b", "x"]);
   });
 
   it("does not read HTML inside a fenced block or a code span as HTML", () => {

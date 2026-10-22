@@ -1,5 +1,6 @@
 import SearchAndReplace from "@sereneinserenade/tiptap-search-and-replace";
 import type { Editor } from "@tiptap/core";
+import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
@@ -41,9 +42,17 @@ const LinkWithTitle = Link.extend({
  */
 export function buildEditorExtensions(placeholder = "Start writing…") {
   return [
+    // All six levels parse, so a note's #### survives a save; the toolbar
+    // still offers only H1-H3 (FormatBar's HEADING_LEVELS).
     StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
+      heading: { levels: [1, 2, 3, 4, 5, 6] },
     }),
+    // Without an Image node, tiptap-markdown parsed ![alt](src) into nothing
+    // and the next save deleted it. Inline so an image stays inside its
+    // sentence instead of splitting the paragraph around it. The src is kept
+    // as written; a relative path does not resolve in the webview yet, so the
+    // image shows as broken but its markdown survives.
+    Image.configure({ inline: true }),
     Underline,
     // openOnClick stays false because the caret has to win a plain click inside
     // a contenteditable; LinkClick (below) puts opening behind Cmd-click.

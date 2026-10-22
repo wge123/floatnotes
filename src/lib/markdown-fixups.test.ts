@@ -192,3 +192,25 @@ describe("one markdown parser per editor", () => {
     expect(registered()).toBe(first);
   });
 });
+
+// Found by the editor-blind corpus check: TipTap 3's numbered-list tokenizer
+// also accepts letters and roman numerals as markers, so a sentence that
+// starts with a short word and a full stop became a list item and the word
+// turned into "1.". Markdown only has digits.
+describe("a line that starts with a word and a full stop", () => {
+  it.each([
+    "No. One Pro license works on all platforms.",
+    "No. Hooks hand events off and return immediately.",
+    "Mr. Smith came.",
+    "I. Introduction",
+    "a. first\nb. second",
+    "iv) fourth",
+  ])("stays a paragraph: %j", (note) => {
+    expect(roundTrip(note)).toBe(note);
+  });
+
+  it("keeps a real numbered list, with a paragraph after a heading", () => {
+    const note = "### Q\n\n1. one\n2. two\n\nNo. Not a list.";
+    expect(roundTrip(note)).toBe(note);
+  });
+});

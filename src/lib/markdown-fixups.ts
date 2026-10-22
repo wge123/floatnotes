@@ -1,4 +1,5 @@
 import { Code } from "@tiptap/extension-code";
+import { CodeBlock } from "@tiptap/extension-code-block";
 import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
 import { Paragraph } from "@tiptap/extension-paragraph";
@@ -57,6 +58,21 @@ export const NoteParagraph = Paragraph.extend({
  * back as it read it.
  */
 export const NoteCode = Code.extend({ excludes: "" });
+
+/**
+ * The stock code block keeps a fenced token only when its source starts with
+ * the fence, but marked hands over a fence inside a list item with the item's
+ * indentation still on it (`- a`, then a fence four spaces in), so the whole
+ * block, code included, was dropped on load. Strip the indentation first.
+ */
+export const NoteCodeBlock = CodeBlock.extend({
+  parseMarkdown(token, helpers) {
+    const raw = token.raw ?? "";
+    const fence = /^ {1,3}(?=```|~~~)/.exec(raw);
+    const stripped = fence ? { ...token, raw: raw.slice(fence[0].length) } : token;
+    return callParent("CodeBlock", this.parent, stripped, helpers);
+  },
+});
 
 /**
  * `[![alt](img)](https://example.com)` loses its link on load: the markdown

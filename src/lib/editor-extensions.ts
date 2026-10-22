@@ -15,6 +15,7 @@ import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
 import {
   NoteCode,
+  NoteCodeBlock,
   NoteImage,
   NoteListItem,
   NoteOrderedList,
@@ -51,6 +52,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       link: false,
       code: false,
+      codeBlock: false,
       paragraph: false,
       orderedList: false,
       trailingNode: false,
@@ -62,6 +64,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteHardBreak,
     NoteListItem,
     NoteCode,
+    NoteCodeBlock,
     NoteParagraph,
     NoteOrderedList,
     NoteUnderline,

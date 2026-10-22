@@ -67,6 +67,25 @@ describe("markdown round-trip", () => {
     expect(roundTrip(source)).toBe(expected);
   });
 
+  // A save used to delete these outright: there was no Image node, and the
+  // heading levels stopped at 3, so #### parsed as a plain paragraph.
+  it.each([
+    ["![alt](pic.png)", "![alt](pic.png)"],
+    ['![alt](pic.png "Tip")', '![alt](pic.png "Tip")'],
+    ["#### H4", "#### H4"],
+    ["##### H5", "##### H5"],
+    ["###### H6", "###### H6"],
+  ])("keeps %j instead of dropping it", (source, expected) => {
+    expect(roundTrip(source)).toBe(expected);
+  });
+
+  // Inline, or ProseMirror splits the paragraph around a block image and the
+  // save turns one line into three.
+  it("keeps an image inside its sentence", () => {
+    const source = "Image ![alt](pic.png) here.";
+    expect(roundTrip(source)).toBe(source);
+  });
+
   it("serializes edits made through editor commands as markdown", () => {
     const editor = createEditor("plain");
     editor.commands.selectAll();

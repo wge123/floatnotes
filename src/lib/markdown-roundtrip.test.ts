@@ -196,10 +196,23 @@ describe("markdown tables", () => {
     expect(out).not.toContain("| wide |");
   });
 
-  // The one keystroke that used to turn a good table into an HTML blob: Enter
-  // split a cell's paragraph in two, and a two-block cell is not
-  // pipe-serializable. The keymap swallows it inside a cell (ADR 0013).
-  it("Enter inside a cell is a no-op, so the table stays pipe markdown", () => {
+  // Enter used to split a cell's paragraph in two, and a two-block cell is not
+  // pipe-serializable. ADR 0019: Enter now moves to the cell below in the same
+  // column and does nothing in the last row. Cells stay single-line.
+  it("Enter in a cell moves the caret to the cell below, same column", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "b");
+
+    pressKey(editor, "Enter");
+    editor.commands.insertContent("x");
+
+    const out = saveNote(editor);
+    expect(out).not.toContain("<table");
+    expect(squeeze(out)).toBe("| a | b |\n| --- | --- |\n| 1 | 2x |");
+    editor.destroy();
+  });
+
+  it("Enter in the last row does nothing", () => {
     const editor = createEditor(TABLE);
     caretAfter(editor, "1");
     expect(editor.isActive("tableCell")).toBe(true);

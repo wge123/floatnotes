@@ -10,12 +10,12 @@ import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskList } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
+import { MarkdownPaste } from "./markdown-paste";
 import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
 import {
   NoteCode,
   NoteImage,
-  NoteLink,
   NoteListItem,
   NoteOrderedList,
   NoteParagraph,
@@ -25,6 +25,7 @@ import {
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
 import { RawBlock, RawInline } from "./raw-blocks";
+import { NoteUnderline, SpelledLink, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -55,6 +56,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       trailingNode: false,
       hardBreak: false,
       listItem: false,
+      underline: false,
     }),
     TrailingParagraph,
     NoteHardBreak,
@@ -62,7 +64,8 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteCode,
     NoteParagraph,
     NoteOrderedList,
-    NoteLink.configure({ openOnClick: false, autolink: true }),
+    NoteUnderline,
+    SpelledLink.configure({ openOnClick: false, autolink: true }),
     // Inline so an image stays inside its sentence instead of splitting the
     // paragraph around it. The src is kept as written; a relative path does
     // not resolve in the webview yet, so the image shows as broken but its
@@ -91,6 +94,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     // and draws widgets, and hooks no other extension's rules. ADR 0005's
     // post-v1 reveal-on-caret.
     RevealMarkers,
+    MarkdownPaste,
     EditorKeymap,
   ];
 }
@@ -114,8 +118,11 @@ export function saveNote(
   editor: Editor,
   frontMatter: FrontMatter | null = null,
 ): string {
-  const body = editor.markdown!.serialize(
-    prepareForSave(getSerializationDocument(editor).toJSON()),
+  const body = cleanEscapes(
+    editor,
+    editor.markdown!.serialize(
+      prepareForSave(spellMarks(getSerializationDocument(editor).toJSON())),
+    ),
   );
   return (frontMatter?.raw ?? "") + body;
 }

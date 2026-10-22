@@ -1,10 +1,12 @@
+import { Code } from "@tiptap/extension-code";
 import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
-import { ListItem } from "@tiptap/extension-list";
+import { Paragraph } from "@tiptap/extension-paragraph";
+import { ListItem, TaskItem } from "@tiptap/extension-list";
 import type { JSONContent } from "@tiptap/core";
 
 /**
- * Four places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
+ * Seven places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
  * editor on TipTap 2 kept. Each one was found by the corpus check
  * (scripts/corpus-check) against real notes.
  */
@@ -26,6 +28,32 @@ export const NoteImage = Image.extend({
     return `[${image}](${dest}${title ? ` "${title.replace(/"/g, '\\"')}"` : ""})`;
   },
 });
+
+/**
+ * The stock paragraph handler unwraps a paragraph that holds only an image
+ * (`![alt](src)` on its own line), on the assumption that images are blocks.
+ * Here the image is inline, so that left an image directly under the document,
+ * which the schema rejects. Keep it in its paragraph.
+ */
+export const NoteParagraph = Paragraph.extend({
+  parseMarkdown(token, helpers) {
+    const tokens = token.tokens ?? [];
+    if (tokens.length === 1 && tokens[0].type === "image") {
+      return { type: "paragraph", content: helpers.parseInline(tokens) };
+    }
+    return this.parent?.(token, helpers) ?? [];
+  },
+});
+
+/**
+ * Inline code excludes every other mark by default, but the markdown parser
+ * builds marks without checking, so `[`npm`](https://x)` or **`bold code`**
+ * became a text node holding link+code, which the schema rejects. The document
+ * was invalid, and TipTap's trailing-node step threw on it at every
+ * transaction. Code coexists with other marks instead, which markdown writes
+ * back as it read it.
+ */
+export const NoteCode = Code.extend({ excludes: "" });
 
 /**
  * `[![alt](img)](https://example.com)` loses its link on load: the markdown
@@ -76,7 +104,46 @@ export const NoteListItem = ListItem.extend({
     }
     return this.parent?.(token, helpers) ?? [];
   },
+
+  renderMarkdown(node, helpers, context) {
+    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+  },
 });
+
+/** A task item has the same continuation-line problem as a bullet. */
+export const NoteTaskItem = TaskItem.extend({
+  renderMarkdown(node, helpers, context) {
+    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+  },
+});
+
+/**
+ * A paragraph inside a list item can hold soft line breaks, and the stock
+ * serializer leaves their continuation lines flush left. Markdown accepts
+ * that (a "lazy continuation"), but marked 17 ends the item early on some of
+ * them, e.g. a line that starts with `(` and a code span beginning with `#`,
+ * which split one paragraph in two on the next load. Indent the continuation
+ * lines to the item's text, the form the notes were written in.
+ */
+function indentContinuation(
+  out: string,
+  node: JSONContent,
+  helpers: { renderChild?: (child: JSONContent, index: number) => string },
+): string {
+  const first = node.content?.[0];
+  if (first?.type !== "paragraph") return out;
+  const paragraph = helpers.renderChild?.(first, 0);
+  if (!paragraph) return out;
+  if (!paragraph.includes("\n")) return out;
+  const at = out.indexOf(paragraph);
+  if (at < 0) return out;
+  const pad = " ".repeat(at);
+  const indented = paragraph
+    .split("\n")
+    .map((line, i) => (i === 0 || line === "" ? line : pad + line))
+    .join("\n");
+  return out.slice(0, at) + indented + out.slice(at + paragraph.length);
+}
 
 /**
  * Shape the document the way the serializer can write it back losslessly.
@@ -114,6 +181,17 @@ export function prepareForSave(node: JSONContent): JSONContent {
             : c,
       );
     }
+    // `<br/>` at the end of a source line leaves that line's newline as the
+    // start of the next text. Written after a break it would be a blank line
+    // and split the paragraph, so the break alone stands for it.
+    content = content.map((c, i) =>
+      i > 0 &&
+      content[i - 1].type === "hardBreak" &&
+      c.type === "text" &&
+      c.text
+        ? { ...c, text: c.text.replace(/^[ \t]*\n/, "") }
+        : c,
+    );
     while (content.length > 0 && content[content.length - 1].type === "hardBreak") {
       content = content.slice(0, -1);
     }

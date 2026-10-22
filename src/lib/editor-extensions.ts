@@ -1,6 +1,5 @@
 import { Search } from "./search-extension";
 import type { Editor } from "@tiptap/core";
-import { TaskItem } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
@@ -13,8 +12,17 @@ import { EmptyTaskList } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
 import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
-import { NoteImage, NoteLink, NoteListItem, prepareForSave } from "./markdown-fixups";
+import {
+  NoteCode,
+  NoteImage,
+  NoteLink,
+  NoteListItem,
+  NoteParagraph,
+  NoteTaskItem,
+  prepareForSave,
+} from "./markdown-fixups";
 import { NoteTable } from "./table-markdown";
+import { installParseSanitizer } from "./markdown-sanitize";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -27,6 +35,7 @@ import { TrailingParagraph, getSerializationDocument } from "./trailing-paragrap
  * `setContent`'s option): a bare string is parsed as HTML in TipTap 3.
  */
 export function buildEditorExtensions(placeholder = "Start writing…") {
+  installParseSanitizer();
   return [
     // All six levels parse, so a note's #### survives a save; the toolbar
     // still offers only H1-H3 (FormatBar's HEADING_LEVELS).
@@ -38,6 +47,8 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       link: false,
+      code: false,
+      paragraph: false,
       trailingNode: false,
       hardBreak: false,
       listItem: false,
@@ -45,6 +56,8 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     TrailingParagraph,
     NoteHardBreak,
     NoteListItem,
+    NoteCode,
+    NoteParagraph,
     NoteLink.configure({ openOnClick: false, autolink: true }),
     // Inline so an image stays inside its sentence instead of splitting the
     // paragraph around it. The src is kept as written; a relative path does
@@ -53,7 +66,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteImage.configure({ inline: true }),
     LinkClick,
     EmptyTaskList,
-    TaskItem.configure({ nested: true }),
+    NoteTaskItem.configure({ nested: true }),
     TaskListInputRule,
     // resizable stays off: the column-resize plugin listens on the same
     // pointer stream lib/drag.ts uses to move the NSPanel, so a drag near a

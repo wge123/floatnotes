@@ -17,6 +17,20 @@ describe("sourceFacts", () => {
     expect(sourceFacts("a  \nb").hardBreaks).toBe(1);
   });
 
+  // A break that ends its block says nothing in markdown (the editor drops it
+  // on save, by design), so it is not content.
+  it("does not count a hard break that ends its paragraph", () => {
+    expect(sourceFacts("line<br>").hardBreaks).toBe(0);
+    expect(sourceFacts("line<br>\n\nnext paragraph").hardBreaks).toBe(0);
+    expect(sourceFacts("**bold**<br>").hardBreaks).toBe(0);
+    expect(sourceFacts("line<br>\nmore").hardBreaks).toBe(1);
+    expect(sourceFacts("one<br>two<br>").hardBreaks).toBe(1);
+  });
+
+  it("leaves trailing whitespace off a raw HTML block, which is not content", () => {
+    expect(sourceFacts('<div align="center">\n  \ntext').rawSources).toEqual(['<div align="center">']);
+  });
+
   it("reads table cells and task items", () => {
     const f = sourceFacts("| a | b |\n| - | - |\n| 1 | 2 |\n\n- [ ] todo");
     expect(f.words).toEqual(["a", "b", "1", "2", "todo"]);

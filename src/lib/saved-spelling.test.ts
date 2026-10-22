@@ -75,13 +75,22 @@ describe("saves keep today's spelling", () => {
     ed.destroy();
   });
 
+  // `++` in prose is not underline: the stock tokenizer paired the two `++` of
+  // "CAM++ (a) ... CAM++ (b)" and trimmed the space inside, changing the text.
+  // A pair opens only before a non-space, not right after a letter or digit,
+  // and closes only after a non-space.
+  it.each([
+    "CAM++ (a, ~7.2M) x. then CAM++ (b)",
+    "C++, Java and C++",
+    "x ++ y ++ z",
+    "i++ and j++",
+  ])("leaves ++ in prose alone: %j", (source) => {
+    expect(roundTrip(source)).toBe(source);
+  });
+
   it("keeps ++ for underlined text that <u> would read back as raw HTML", () => {
     // `<u>` content is raw HTML on load, so an escape inside it would come
     // back as a literal backslash and grow on every save.
-    const source = "CAM++ (a, ~7.2M) x. then CAM++ (b)";
-    const once = roundTrip(source);
-    expect(once).toBe("CAM++(a, ~7.2M) x. then CAM++ (b)");
-    expect(roundTrip(once)).toBe(once);
     const starred = roundTrip("x ++snake_case and *star*++ y");
     expect(starred).toContain("++");
     expect(roundTrip(starred)).toBe(starred);

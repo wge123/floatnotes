@@ -79,6 +79,46 @@ describe("text after a code fence inside a list item", () => {
   });
 });
 
+describe("documents the schema accepts", () => {
+  const valid = (note: string) => {
+    roundTrip(note);
+    expect(() => editor.state.doc.check()).not.toThrow();
+  };
+
+  it("keeps a lone image inside its paragraph", () => {
+    valid("para\n\n![alt](pic.png)\n\nmore");
+    expect(roundTrip("![alt](pic.png)")).toBe("![alt](pic.png)");
+    valid('<img src="pic.png" alt="alt" width="400" />');
+  });
+
+  it("lets inline code carry a link or bold, and writes them back", () => {
+    const note = "see [`npm`](https://example.com) and **`bold code`**";
+    valid(note);
+    expect(roundTrip(note)).toBe(note);
+  });
+});
+
+describe("a break written as <br/> at the end of a source line", () => {
+  it("does not split the paragraph on save", () => {
+    const once = roundTrip("- one<br/>\ntwo<br/>\nthree\n");
+    expect(once).toBe("- one\\\n  two\\\n  three");
+    expect(roundTrip(once)).toBe(once);
+  });
+});
+
+describe("a wrapped paragraph inside a list item", () => {
+  // marked 17 ends the item at the line after one that starts with `(` and
+  // holds a code span beginning with `#`, unless the lines are indented.
+  const note =
+    "- shebang fixed in `x`\n  (`#!/usr/bin/env bun`, commit 6ef in the dir\n  repo, no remote, landed by ff)";
+
+  it("keeps its continuation lines indented, and stays one paragraph", () => {
+    const once = roundTrip(note);
+    expect(once).toBe(note);
+    expect(roundTrip(once)).toBe(once);
+  });
+});
+
 describe("one markdown parser per editor", () => {
   const registered = () => {
     const e = new Editor({

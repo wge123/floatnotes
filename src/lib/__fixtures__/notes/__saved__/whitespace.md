@@ -1,11 +1,13 @@
 # Whitespace
 
-Line ending in two spaces\
+Line ending in two spaces  
 next line after a hard break.
 
-A tab inside a line.
+A	tab inside a line.
 
-Trailing spaces at the end
+Trailing spaces at the end   
+
+
 
 Three blank lines above.
 

@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import { AllSelection } from "@tiptap/pm/state";
+import { AllSelection, Selection } from "@tiptap/pm/state";
 
 /**
  * ⌘A yields an AllSelection, from which ProseMirror can't compute a lift target
@@ -7,11 +7,28 @@ import { AllSelection } from "@tiptap/pm/state";
  * bullet/ordered/task list) wrap but won't un-wrap. Coerce it to an explicit
  * full-document text selection first; then toggleX can lift back out. Marks and
  * codeBlock don't lift, so they never hit this and don't need the coercion.
+ *
+ * The selection stops before a final empty paragraph (the trailing node's
+ * click target): a range that straddles a quote and that paragraph is not
+ * "inside the quote", so the second toggle would wrap again instead of lift.
  */
 function liftableChain(editor: Editor) {
   const chain = editor.chain().focus();
   if (editor.state.selection instanceof AllSelection) {
-    chain.setTextSelection({ from: 0, to: editor.state.doc.content.size });
+    const { doc } = editor.state;
+    const last = doc.lastChild;
+    const trailingEmpty =
+      doc.childCount > 1 &&
+      last?.type.name === "paragraph" &&
+      last.content.size === 0;
+    const to = trailingEmpty
+      ? (Selection.findFrom(
+          doc.resolve(doc.content.size - last.nodeSize),
+          -1,
+          true,
+        )?.to ?? doc.content.size)
+      : doc.content.size;
+    chain.setTextSelection({ from: 0, to });
   }
   return chain;
 }
@@ -145,10 +162,9 @@ export const FORMAT_COMMANDS: readonly FormatCommand[] = [
  * Insert a table at the caret. Not a FormatCommand: those are toggles, and the
  * toolbar's round-trip test runs each one twice expecting it to switch off.
  *
- * The header row is not optional (ADR 0013). tiptap-markdown refuses to emit
- * pipe syntax when the first row holds a plain cell, and silently writes a raw
- * <table> HTML blob into the .md file instead, so every table the UI can
- * produce starts header-first and stays markdown.
+ * The header row is not optional (ADR 0013): a pipe table has one, so every
+ * table the UI can produce starts header-first and stays markdown rather than
+ * relying on the serializer to invent an empty header row.
  */
 export function insertTable(editor: Editor): void {
   editor

@@ -10,6 +10,7 @@ function withEditor<T>(markdown: string, fn: (editor: Editor) => T): T {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content: markdown,
+    contentType: "markdown",
   });
   try {
     return fn(editor);

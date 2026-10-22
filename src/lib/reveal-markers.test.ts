@@ -11,6 +11,7 @@ function withEditor<T>(markdown: string, fn: (editor: Editor) => T): T {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content: markdown,
+    contentType: "markdown",
   });
   try {
     return fn(editor);
@@ -137,6 +138,7 @@ describe("the plugin is actually wired into the editor", () => {
       element: el,
       extensions: buildEditorExtensions(),
       content: markdown,
+      contentType: "markdown",
     });
     try {
       return fn(editor, el);

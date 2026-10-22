@@ -14,8 +14,8 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
  * caret is inside styled text. Nothing here can reach the file on disk.
  *
  * The marker strings are the ones the serializer emits, not a second opinion
- * about markdown: `bulletListMarker: "-"` and tiptap-markdown's defaults in
- * editor-extensions.ts are what a save actually writes, so revealing anything
+ * about markdown: `bulletListMarker: "-"` and the @tiptap/markdown defaults
+ * in editor-extensions.ts are what a save actually writes, so revealing anything
  * else would teach the wrong syntax.
  */
 const MARK_MARKERS: Record<string, string> = {

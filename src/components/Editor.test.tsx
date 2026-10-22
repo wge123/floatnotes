@@ -70,3 +70,21 @@ describe("Editor with front matter", () => {
     expect(onChange).toHaveBeenLastCalledWith("---\ntitle: Renamed\n---\n\n# Hi\n\nbody");
   });
 });
+
+describe("Editor reloading after an external change", () => {
+  it("parses the new text as markdown and does not save it back", async () => {
+    onChange.mockClear();
+    await act(async () =>
+      root.render(
+        <Editor
+          value={"# Fresh\n\n- [ ] one\n- [x] two"}
+          onChange={onChange}
+          onReady={(e) => (editor = e)}
+        />,
+      ),
+    );
+    const types = editor!.getJSON().content?.map((n) => n.type);
+    expect(types?.slice(0, 2)).toEqual(["heading", "taskList"]);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

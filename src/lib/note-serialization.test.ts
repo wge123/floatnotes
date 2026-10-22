@@ -44,6 +44,7 @@ function createEditor(note: string): {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
+    contentType: "markdown",
   });
   return { editor, frontMatter };
 }
@@ -59,8 +60,6 @@ function save(note: string): string {
  * Notes whose saved bytes change again on the next save, today:
  * - list-markers: a `*` list and the `-` list after it both save as `-`, so
  *   they re-parse as one loose list and gain blank lines.
- * - quotes-and-tables: `a \| b` in a cell saves unescaped, so the next save
- *   reads an extra column and drops the row's last cell.
  */
 const KEEPS_CHANGING = new Set(["list-markers.md"]);
 
@@ -105,7 +104,7 @@ describe.each(cases)("saving %s", (name, source) => {
 // real note uses CRLF and the save decides what its line endings become.
 it("pins what a save does to CRLF line endings", () => {
   const out = save("# Title\r\n\r\nline one\r\nline two\r\n");
-  expect(JSON.stringify(out)).toMatchInlineSnapshot(`""# Title\\n\\nline one line two""`);
+  expect(JSON.stringify(out)).toMatchInlineSnapshot(`""# Title\\n\\nline one\\nline two""`);
 });
 
 // ADR 0018: front matter is split off before the editor sees the note and

@@ -13,7 +13,7 @@ function searchStorage(editor: TiptapEditor): {
   results: SearchMatch[];
   resultIndex: number;
 } {
-  return editor.storage.search;
+  return (editor.storage as unknown as { search: ReturnType<typeof searchStorage> }).search;
 }
 
 /**

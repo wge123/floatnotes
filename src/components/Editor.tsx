@@ -44,6 +44,8 @@ export default function Editor({
   const editor = useEditor({
     extensions: buildEditorExtensions(placeholder),
     content: loaded.content,
+    // A bare string is HTML in TipTap 3.
+    contentType: "markdown",
     onCreate: ({ editor }) => onReady?.(editor),
     onUpdate: ({ editor }) =>
       onChange(saveNote(editor, frontMatterRef.current)),
@@ -58,7 +60,12 @@ export default function Editor({
       const next = loadNote(value);
       frontMatterRef.current = next.frontMatter;
       setFrontMatter(next.frontMatter);
-      editor.commands.setContent(next.content, false);
+      // Markdown, not HTML, and no update event: a reload is not an edit, so
+      // it must not write the note back.
+      editor.commands.setContent(next.content, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
     }
   }, [editor, value]);
 

@@ -50,10 +50,10 @@ export const EditorKeymap = Extension.create({
         return true;
       },
 
-      // A cell holding two blocks is not markdown-serializable, and
-      // tiptap-markdown answers that by silently writing a raw <table> HTML
-      // blob into the note (ADR 0013). Enter is the one-keystroke route into
-      // that state, so inside a cell it does nothing at all; Tab and Shift-Tab
+      // A cell holding two blocks is not pipe-serializable (ADR 0013; TipTap 3
+      // flattens the blocks into one line joined by <br>, which ticket 08
+      // revisits). Enter is the one-keystroke route into that state, so inside
+      // a cell it does nothing at all; Tab and Shift-Tab
       // (bound by the Table extension) still move between cells. Outside a
       // table this returns false and the default Enter handling runs.
       Enter: () =>

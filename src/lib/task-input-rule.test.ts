@@ -10,6 +10,7 @@ function createEditor(content = ""): Editor {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
+    contentType: "markdown",
   });
   return editor;
 }
@@ -41,7 +42,7 @@ describe("typing todos (Raycast parity)", () => {
     type(ed, "- [ ] buy milk");
     const doc = ed.getJSON();
     expect(doc.content?.[0]?.type).toBe("taskList");
-    expect(doc.content?.[0]?.content?.[0]?.attrs?.checked).toBe(false);
+    expect((doc.content?.[0]?.content?.[0] as { attrs?: { checked?: boolean } } | undefined)?.attrs?.checked).toBe(false);
     expect(saveNote(ed)).toBe("- [ ] buy milk");
   });
 
@@ -50,7 +51,7 @@ describe("typing todos (Raycast parity)", () => {
     type(ed, "- [x] done thing");
     const doc = ed.getJSON();
     expect(doc.content?.[0]?.type).toBe("taskList");
-    expect(doc.content?.[0]?.content?.[0]?.attrs?.checked).toBe(true);
+    expect((doc.content?.[0]?.content?.[0] as { attrs?: { checked?: boolean } } | undefined)?.attrs?.checked).toBe(true);
     expect(saveNote(ed)).toBe("- [x] done thing");
   });
 

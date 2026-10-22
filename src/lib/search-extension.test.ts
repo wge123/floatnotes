@@ -1,6 +1,6 @@
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
+import { Placeholder } from "@tiptap/extensions";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Search } from "./search-extension";
@@ -19,7 +19,7 @@ function make(content: string): Editor {
 afterEach(() => editor?.destroy());
 
 const storage = () =>
-  editor.storage.search as {
+  (editor.storage as unknown as { search: unknown }).search as {
     results: { from: number; to: number }[];
     resultIndex: number;
   };

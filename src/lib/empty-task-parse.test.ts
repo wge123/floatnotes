@@ -10,6 +10,7 @@ function roundTrip(markdown: string): string {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content: markdown,
+    contentType: "markdown",
   });
   return saveNote(editor);
 }
@@ -56,7 +57,17 @@ describe("empty task items survive a round-trip", () => {
   it("keeps checked state through the round-trip", () => {
     roundTrip("- [x] ");
     const task = editor.getJSON().content?.[0]?.content?.[0];
-    expect(task?.attrs?.checked).toBe(true);
+    expect((task as { attrs?: { checked?: boolean } } | undefined)?.attrs?.checked).toBe(true);
+  });
+});
+
+describe("an empty task never disturbs its neighbours", () => {
+  it.each([
+    ["- [x] a\n- [ ]\n- [ ] c", "- [x] a\n- [ ] \n- [ ] c"],
+    ["- [ ]\n- [x] a", "- [ ] \n- [x] a"],
+    ["para\n\n- [ ]", "para\n\n- [ ] "],
+  ])("round-trips %j", (source, expected) => {
+    expect(roundTrip(source)).toBe(expected);
   });
 });
 

@@ -9,6 +9,7 @@ function createEditor(content = ""): Editor {
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
+    contentType: "markdown",
   });
 }
 
@@ -56,9 +57,30 @@ describe("linkify rewrites converge after one save", () => {
   // linkify is the single place FloatNotes rewrites a note's markdown instead of
   // preserving it, so the rewrite has to be idempotent: a note may change shape
   // once, never drift on every subsequent save.
-  it.each([
+  //
+  // it.fails.each: TipTap 3 spells a bare URL `[url](url)`, not `<url>`. The
+  // link syntax a save writes is ticket 05's (todo f9134a04); these flip back
+  // to `it.each` there. The v3 spelling is pinned below meanwhile.
+  it.fails.each([
     ["https://example.com", "<https://example.com>"],
     ["see https://example.com here", "see <https://example.com> here"],
+  ])("%j canonicalises once to %j", (source, canonical) => {
+    expect(roundTrip(source)).toBe(canonical);
+    expect(roundTrip(canonical)).toBe(canonical);
+  });
+
+  it.each([
+    ["https://example.com", "[https://example.com](https://example.com)"],
+    [
+      "see https://example.com here",
+      "see [https://example.com](https://example.com) here",
+    ],
+  ])("%j converges once to the v3 spelling %j", (source, canonical) => {
+    expect(roundTrip(source)).toBe(canonical);
+    expect(roundTrip(canonical)).toBe(canonical);
+  });
+
+  it.each([
     ["www.example.com", "[www.example.com](http://www.example.com)"],
     ["a@b.com", "[a@b.com](mailto:a@b.com)"],
   ])("%j canonicalises once to %j", (source, canonical) => {
@@ -86,6 +108,7 @@ describe("Cmd-click opens a link", () => {
       element,
       extensions: buildEditorExtensions(),
       content: markdown,
+      contentType: "markdown",
     });
     const anchor = element.querySelector("a");
     expect(anchor).not.toBeNull();
@@ -116,8 +139,8 @@ describe("Cmd-click opens a link", () => {
   });
 
   // A relative link is the case that reaches the handler and must be refused:
-  // markdown-it already declines to build an anchor for a dangerous scheme (see
-  // the rendering test below), but `./other.md` is a perfectly ordinary anchor
+  // the Link mark already blanks the href of a dangerous scheme (see the
+  // rendering test below), but `./other.md` is a perfectly ordinary anchor
   // that means nothing to the OS opener.
   it("refuses a relative href even with the modifier held", () => {
     expect(clickLink("[x](./other.md)", { metaKey: true })).not.toHaveBeenCalled();
@@ -125,16 +148,19 @@ describe("Cmd-click opens a link", () => {
 });
 
 describe("dangerous schemes never become links", () => {
-  // markdown-it validates a link target and leaves the source as literal text
-  // when it fails, so these never reach the DOM at all. shouldOpen is the second
-  // layer, for hrefs written straight into the document by other routes.
+  // TipTap 3's Link mark keeps the markdown (so a save is lossless) but its
+  // isAllowedUri check renders an empty href, so no dangerous scheme reaches
+  // the DOM. shouldOpen is the second layer, for hrefs written straight into
+  // the document by other routes.
   it.each([
     "[x](javascript:alert(1))",
     "[x](vbscript:msgbox)",
     "[x](data:text/html,<b>h</b>)",
     "[x](file:///etc/passwd)",
-  ])("renders %j without an anchor", (source) => {
-    expect(render(source)).not.toContain("<a ");
+  ])("renders %j without a usable href", (source) => {
+    const html = render(source);
+    expect(html).not.toMatch(/href="(javascript|vbscript|data|file):/i);
+    expect(html).toContain('href=""');
   });
 });
 

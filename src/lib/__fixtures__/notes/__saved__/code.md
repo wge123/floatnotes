@@ -14,4 +14,4 @@ indented code block
 second line
 ```
 
-Inline `code with *stars*` and `` double `tick` code ``.
+Inline `code with *stars*` and ``double `tick` code``.

@@ -4,7 +4,6 @@
 - star bullet two
   - nested star, two spaces
 
-
 - dash bullet
   - nested dash, four spaces
     - deeper, eight spaces
@@ -15,11 +14,8 @@
 3. tenth keeps its number
 
 - [ ] open task
-
 - [x] done task
-
   - [ ] nested task
-
 - [ ] 
 
 - item with a continuation paragraph

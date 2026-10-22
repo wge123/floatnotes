@@ -11,13 +11,14 @@ import { buildEditorExtensions, loadNote, saveNote } from "./editor-extensions";
  */
 let editor: Editor;
 
-function open(note: string): Editor {
+function open(note: string, onUpdate: () => void = () => {}): Editor {
   const { content } = loadNote(note);
   editor = new Editor({
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
     contentType: "markdown",
+    onUpdate,
   });
   return editor;
 }
@@ -55,24 +56,39 @@ describe("tables (stories 15, 16)", () => {
 
 describe("the empty spot after a final block (stories 27-29)", () => {
   const TABLE = "| a | b |\n| --- | --- |\n| 1 | 2 |";
+  // TipTap 3 pads cells to the column width; squeeze that out to compare.
+  const squeeze = (md: string) =>
+    md.replace(/ +/g, " ").replace(/-{3,}/g, "---");
+  // The trailing paragraph is appended by an empty transaction on the
+  // editor's create tick.
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  it("gives a final table a paragraph to click into", () => {
+  it("gives a final table a paragraph to click into", async () => {
     open(TABLE);
+    await settled();
     expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
   });
 
-  it("does not save that paragraph while it is untouched", () => {
+  it("does not save that paragraph while it is untouched", async () => {
     open(TABLE);
-    const out = saveNote(editor);
-    expect(out.trimEnd()).toBe(TABLE);
-    expect(out).not.toMatch(/\n\n$/);
+    await settled();
+    expect(squeeze(saveNote(editor))).toBe(TABLE);
   });
 
-  it("saves it once the user types in it", () => {
+  it("opening the note emits no update, so it is never written", async () => {
+    let updates = 0;
+    open(TABLE, () => updates++);
+    await settled();
+    expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
+    expect(updates).toBe(0);
+  });
+
+  it("saves it once the user types in it", async () => {
     open(TABLE);
+    await settled();
     const end = Selection.atEnd(editor.state.doc).from;
     editor.chain().insertContentAt(end, "after").run();
-    expect(saveNote(editor)).toMatch(/\| 1 {1,}\| 2 {1,}\|\n+after$/);
+    expect(squeeze(saveNote(editor))).toBe(`${TABLE}\n\nafter`);
   });
 
   it("keeps a note without a final newline in that shape", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
-import type { SearchAndReplaceStorage } from "@sereneinserenade/tiptap-search-and-replace";
+import type { SearchMatch } from "../lib/search-extension";
 
 import { trapTab } from "../lib/focus-trap";
 
@@ -9,8 +9,11 @@ export interface FindBarProps {
   onClose: () => void;
 }
 
-function searchStorage(editor: TiptapEditor): SearchAndReplaceStorage {
-  return editor.storage.searchAndReplace as SearchAndReplaceStorage;
+function searchStorage(editor: TiptapEditor): {
+  results: SearchMatch[];
+  resultIndex: number;
+} {
+  return editor.storage.search;
 }
 
 /**

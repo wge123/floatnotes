@@ -107,10 +107,6 @@ Added by the 2026-07-30 UI/UX audit — surfaces a browser can never reach
 
 ## Known environment gotchas
 
-- vitest loads a second `prosemirror-view` (ESM/CJS dual-package) for the
-  search plugin — empty-doc editors crash in tests only; production verified
-  unaffected. Typing tests exclude `searchAndReplace` (see
-  task-input-rule.test.ts). Revisit if the plugin or vitest is upgraded.
 - Playwright's `Meta+a` is `ControlOrMeta+a` in run-code.
 - The `.tiptap` element is the editable surface; `.floatnotes-editor` is its
   wrapper.

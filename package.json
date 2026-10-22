@@ -12,7 +12,6 @@
     "app:install": "tauri build && (osascript -e 'quit app \"FloatNotes\"' 2>/dev/null || true) && rm -rf /Applications/FloatNotes.app && cp -R src-tauri/target/release/bundle/macos/FloatNotes.app /Applications/ && open /Applications/FloatNotes.app"
   },
   "dependencies": {
-    "@sereneinserenade/tiptap-search-and-replace": "^0.1.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2",

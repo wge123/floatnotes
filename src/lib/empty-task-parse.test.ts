@@ -5,19 +5,10 @@ import { buildEditorExtensions, saveNote } from "./editor-extensions";
 
 let editor: Editor;
 
-/**
- * SearchAndReplace is excluded HERE ONLY, for the same reason as
- * task-input-rule.test.ts: under vitest its direct "prosemirror-view" import
- * loads a second module instance (ESM/CJS dual-package hazard) whose foreign
- * DecorationSet crashes on empty nodes — and an empty task item is precisely
- * an empty node. Verified unaffected in the real app.
- */
 function roundTrip(markdown: string): string {
   editor = new Editor({
     element: document.createElement("div"),
-    extensions: buildEditorExtensions().filter(
-      (e) => e.name !== "searchAndReplace",
-    ),
+    extensions: buildEditorExtensions(),
     content: markdown,
   });
   return saveNote(editor);

@@ -82,7 +82,7 @@ const stubEditor = {
     nextSearchResult: vi.fn(),
     previousSearchResult: vi.fn(),
   },
-  storage: { searchAndReplace: { results: [], resultIndex: 0 } },
+  storage: { search: { results: [], resultIndex: 0 } },
 } as unknown as TiptapEditor;
 
 const actions: Action[] = [

@@ -176,10 +176,17 @@ body {
   background: rgb(37 99 235 / 0.08); /* blue-600/8 */
 }
 
-/* ⌘F match highlight (search-and-replace extension, see editor-extensions). */
+/* ⌘F match highlight (lib/search-extension.ts). */
 .search-result {
   background: rgb(253 224 71 / 0.6); /* yellow-300/60 */
   border-radius: 2px;
+}
+
+/* The match Enter jumps to: stronger fill plus an outline so it reads apart
+   from the other matches without relying on colour alone. */
+.search-result.search-result-current {
+  background: rgb(249 115 22 / 0.65); /* orange-500/65 */
+  outline: 1.5px solid rgb(234 88 12); /* orange-600 */
 }
 
 /* Reveal-on-caret markdown markers (RevealMarkers, see lib/reveal-markers.ts).

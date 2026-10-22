@@ -23,6 +23,26 @@ function roundTrip(note: string): string {
 
 afterEach(() => editor?.destroy());
 
+// Found by the editor-blind corpus check (review of todo f9134a04): the stock
+// code block drops a fenced block whose fence is indented, which marked hands
+// over when a fence sits inside a list item.
+describe("a fenced code block indented inside a list item", () => {
+  it("keeps the code under a bullet written with four spaces", () => {
+    expect(roundTrip("- Download\n    ```\n    code1\n    ```\n- Last")).toBe(
+      "- Download\n  ```\n  code1\n  ```\n- Last",
+    );
+  });
+
+  it("keeps the language and the code, tilde fences too", () => {
+    expect(roundTrip("- a\n    ~~~py\n    x = 1\n    ~~~")).toBe("- a\n  ```py\n  x = 1\n  ```");
+  });
+
+  it("still drops nothing when the fence is flush with the item text", () => {
+    const note = "- Download\n  ```\n  code1\n  ```\n- Last";
+    expect(roundTrip(note)).toBe(note);
+  });
+});
+
 describe("a linked image (README badge)", () => {
   const badge = "[![PyPI](https://img.example/p.svg)](https://pypi.example/p/)";
 

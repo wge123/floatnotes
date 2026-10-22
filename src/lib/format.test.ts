@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 import {
   FORMAT_COMMANDS,
   headingCommand,
@@ -48,7 +48,7 @@ describe("FORMAT_COMMANDS", () => {
     const ed = createEditor("word");
     ed.commands.setTextSelection({ from: 1, to: 5 });
     command("bold").run(ed);
-    expect(serializeMarkdown(ed)).toBe("**word**");
+    expect(saveNote(ed)).toBe("**word**");
   });
 
   // Regression: ⌘A yields an AllSelection, from which the lift-based toggles
@@ -74,8 +74,8 @@ describe("FORMAT_COMMANDS", () => {
     const ed = createEditor("word");
     ed.commands.setTextSelection({ from: 1, to: 5 });
     command("underline").run(ed);
-    expect(serializeMarkdown(ed)).toContain("<u>word</u>");
-    const reloaded = createEditor(serializeMarkdown(ed));
+    expect(saveNote(ed)).toContain("<u>word</u>");
+    const reloaded = createEditor(saveNote(ed));
     expect(reloaded.isActive("underline")).toBe(true);
   });
 });
@@ -88,7 +88,7 @@ describe("headings", () => {
     expect(headingCommand(2).isActive(ed)).toBe(true);
     expect(headingCommand(1).isActive(ed)).toBe(false);
     expect(inAnyHeading(ed)).toBe(true);
-    expect(serializeMarkdown(ed)).toBe("## word");
+    expect(saveNote(ed)).toBe("## word");
   });
 });
 
@@ -101,7 +101,7 @@ describe("insertTable", () => {
     const ed = createEditor("intro");
     insertTable(ed);
 
-    const md = serializeMarkdown(ed);
+    const md = saveNote(ed);
     expect(md).not.toContain("<table");
     const [firstRow, delimiter] = md.split("\n");
     expect(firstRow).toBe("|  |  |  |");
@@ -112,7 +112,7 @@ describe("insertTable", () => {
     const ed = createEditor("intro");
     insertTable(ed);
 
-    const rows = serializeMarkdown(ed)
+    const rows = saveNote(ed)
       .split("\n")
       .filter((line) => line.startsWith("|"));
     // Header + delimiter + the remaining body rows.
@@ -133,7 +133,7 @@ describe("toggleLink", () => {
     ed.commands.setTextSelection({ from: 1, to: 5 });
     toggleLink(ed, () => "https://example.com");
     expect(ed.isActive("link")).toBe(true);
-    expect(serializeMarkdown(ed)).toBe("[word](https://example.com)");
+    expect(saveNote(ed)).toBe("[word](https://example.com)");
   });
 
   it("removes an active link without prompting", () => {

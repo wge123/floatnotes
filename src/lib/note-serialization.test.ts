@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import { Selection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 
 /**
  * Pins what a save writes today for notes shaped like the ones in ~/Notes, so
@@ -39,7 +39,7 @@ function createEditor(content: string): Editor {
 
 function save(markdown: string): string {
   const editor = createEditor(markdown);
-  const out = serializeMarkdown(editor);
+  const out = saveNote(editor);
   editor.destroy();
   return out;
 }
@@ -79,13 +79,13 @@ describe.each(cases)("saving %s", (name, source) => {
   // character and take it back so the doc is identical, and the bytes must be.
   it("writes the same bytes after an edit that is undone", () => {
     const editor = createEditor(source);
-    const untouched = serializeMarkdown(editor);
+    const untouched = saveNote(editor);
     // Inside the last textblock: content.size is past the last block, where
     // an insert opens a new paragraph instead of typing.
     const end = Selection.atEnd(editor.state.doc).from;
     editor.chain().insertContentAt(end, "x").run();
     editor.chain().deleteRange({ from: end, to: end + 1 }).run();
-    expect(serializeMarkdown(editor)).toBe(untouched);
+    expect(saveNote(editor)).toBe(untouched);
     editor.destroy();
   });
 });

@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 
 function createEditor(content = ""): Editor {
   return new Editor({
@@ -14,7 +14,7 @@ function createEditor(content = ""): Editor {
 /** Parse markdown into the editor, serialize it back out. */
 function roundTrip(markdown: string): string {
   const editor = createEditor(markdown);
-  const out = serializeMarkdown(editor);
+  const out = saveNote(editor);
   editor.destroy();
   return out;
 }
@@ -90,7 +90,7 @@ describe("markdown round-trip", () => {
     const editor = createEditor("plain");
     editor.commands.selectAll();
     editor.commands.toggleBold();
-    expect(serializeMarkdown(editor)).toBe("**plain**");
+    expect(saveNote(editor)).toBe("**plain**");
     editor.destroy();
   });
 });
@@ -189,7 +189,7 @@ describe("markdown tables", () => {
     pressKey(editor, "Enter");
     editor.commands.insertContent("x");
 
-    const out = serializeMarkdown(editor);
+    const out = saveNote(editor);
     expect(out).not.toContain("<table");
     expect(out).toBe("| a | b |\n| --- | --- |\n| 1x | 2 |\n");
     editor.destroy();
@@ -205,7 +205,7 @@ describe("markdown tables", () => {
     pressKey(editor, "Enter");
     editor.commands.insertContent("two");
 
-    expect(serializeMarkdown(editor)).toBe("one\n\ntwo");
+    expect(saveNote(editor)).toBe("one\n\ntwo");
     editor.destroy();
   });
 });

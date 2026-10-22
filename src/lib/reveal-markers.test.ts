@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 import { markerSpecs } from "./reveal-markers";
 
 /** Same headless-editor pattern as export.test.ts / markdown-roundtrip.test.ts. */
@@ -199,25 +199,25 @@ describe("the document is untouched", () => {
   // write marker characters into the user's note file.
   it("serializes identically with the caret inside styled text", () => {
     withEditor("a **bold** b\n", (editor) => {
-      const before = serializeMarkdown(editor);
+      const before = saveNote(editor);
       specsAt(editor, at(editor, 4));
       expect(markerSpecs(editor.state)).not.toEqual([]);
-      expect(serializeMarkdown(editor)).toBe(before);
+      expect(saveNote(editor)).toBe(before);
     });
   });
 
   it("serializes identically inside a heading", () => {
     withEditor("## Title\n", (editor) => {
-      const before = serializeMarkdown(editor);
+      const before = saveNote(editor);
       specsAt(editor, at(editor, 3));
       expect(markerSpecs(editor.state)).not.toEqual([]);
-      expect(serializeMarkdown(editor)).toBe(before);
+      expect(saveNote(editor)).toBe(before);
     });
   });
 
   it("leaves the doc unchanged across a full caret sweep", () => {
     withEditor("# H\n\na **b** `c` ~~d~~ e\n", (editor) => {
-      const before = serializeMarkdown(editor);
+      const before = saveNote(editor);
       const size = editor.state.doc.content.size;
       for (let pos = 1; pos < size; pos++) {
         try {
@@ -227,7 +227,7 @@ describe("the document is untouched", () => {
           // simply not places a caret can be.
         }
       }
-      expect(serializeMarkdown(editor)).toBe(before);
+      expect(saveNote(editor)).toBe(before);
     });
   });
 });

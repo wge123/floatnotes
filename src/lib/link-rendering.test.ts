@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 import { shouldOpen } from "./link-click";
 
 function createEditor(content = ""): Editor {
@@ -21,7 +21,7 @@ function render(markdown: string): string {
 
 function roundTrip(markdown: string): string {
   const editor = createEditor(markdown);
-  const out = serializeMarkdown(editor);
+  const out = saveNote(editor);
   editor.destroy();
   return out;
 }

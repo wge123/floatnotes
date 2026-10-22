@@ -7,7 +7,7 @@ import {
 
 import {
   buildEditorExtensions,
-  serializeMarkdown,
+  saveNote,
 } from "../lib/editor-extensions";
 import { shouldApplyExternal } from "../lib/external-sync";
 
@@ -36,14 +36,14 @@ export default function Editor({
     extensions: buildEditorExtensions(placeholder),
     content: value,
     onCreate: ({ editor }) => onReady?.(editor),
-    onUpdate: ({ editor }) => onChange(serializeMarkdown(editor)),
+    onUpdate: ({ editor }) => onChange(saveNote(editor)),
   });
 
   // External value changes (file watcher, note switch) — guarded so the echo
   // of our own onChange never resets the caret mid-typing.
   useEffect(() => {
     if (!editor) return;
-    const current = serializeMarkdown(editor);
+    const current = saveNote(editor);
     if (shouldApplyExternal(current, value)) {
       editor.commands.setContent(value, false);
     }

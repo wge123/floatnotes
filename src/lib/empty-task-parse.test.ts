@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 
 let editor: Editor;
 
@@ -20,7 +20,7 @@ function roundTrip(markdown: string): string {
     ),
     content: markdown,
   });
-  return serializeMarkdown(editor);
+  return saveNote(editor);
 }
 
 function firstNodeType(markdown: string): string {

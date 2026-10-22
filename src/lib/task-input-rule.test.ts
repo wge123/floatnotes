@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
+import { buildEditorExtensions, saveNote } from "./editor-extensions";
 
 let editor: Editor;
 
@@ -52,7 +52,7 @@ describe("typing todos (Raycast parity)", () => {
     const doc = ed.getJSON();
     expect(doc.content?.[0]?.type).toBe("taskList");
     expect(doc.content?.[0]?.content?.[0]?.attrs?.checked).toBe(false);
-    expect(serializeMarkdown(ed)).toBe("- [ ] buy milk");
+    expect(saveNote(ed)).toBe("- [ ] buy milk");
   });
 
   it("'- [x] ' becomes a checked task item", () => {
@@ -61,7 +61,7 @@ describe("typing todos (Raycast parity)", () => {
     const doc = ed.getJSON();
     expect(doc.content?.[0]?.type).toBe("taskList");
     expect(doc.content?.[0]?.content?.[0]?.attrs?.checked).toBe(true);
-    expect(serializeMarkdown(ed)).toBe("- [x] done thing");
+    expect(saveNote(ed)).toBe("- [x] done thing");
   });
 
   it("'[] ' shorthand works inside a bullet too", () => {

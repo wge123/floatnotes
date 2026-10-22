@@ -13,6 +13,7 @@ import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 
+import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskParse } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
@@ -114,12 +115,26 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
 }
 
 /**
- * Persisted content is ALWAYS markdown (step 02 contract: getMarkdown(),
- * never getHTML()). tiptap-markdown does not augment TipTap's storage types,
- * hence the local cast.
+ * The note-level pair every caller uses (editor, headless tests, corpus
+ * check). `loadNote` splits leading front matter off before the editor sees
+ * the text; `saveNote` prepends it unchanged (ADR 0018). Persisted content is
+ * ALWAYS markdown (getMarkdown(), never getHTML()). tiptap-markdown does not
+ * augment TipTap's storage types, hence the local cast.
  */
-export function serializeMarkdown(editor: Editor): string {
-  return (
+export function loadNote(text: string): {
+  frontMatter: FrontMatter | null;
+  content: string;
+} {
+  const { frontMatter, body } = splitFrontMatter(text);
+  return { frontMatter, content: body };
+}
+
+export function saveNote(
+  editor: Editor,
+  frontMatter: FrontMatter | null = null,
+): string {
+  const body = (
     editor.storage as { markdown: { getMarkdown(): string } }
   ).markdown.getMarkdown();
+  return (frontMatter?.raw ?? "") + body;
 }

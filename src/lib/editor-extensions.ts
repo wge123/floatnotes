@@ -16,7 +16,6 @@ import { NoteHardBreak } from "./hard-break-markdown";
 import {
   NoteCode,
   NoteImage,
-  NoteLink,
   NoteListItem,
   NoteOrderedList,
   NoteParagraph,
@@ -25,6 +24,7 @@ import {
 } from "./markdown-fixups";
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
+import { NoteUnderline, SpelledLink, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -55,6 +55,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       trailingNode: false,
       hardBreak: false,
       listItem: false,
+      underline: false,
     }),
     TrailingParagraph,
     NoteHardBreak,
@@ -62,7 +63,8 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteCode,
     NoteParagraph,
     NoteOrderedList,
-    NoteLink.configure({ openOnClick: false, autolink: true }),
+    NoteUnderline,
+    SpelledLink.configure({ openOnClick: false, autolink: true }),
     // Inline so an image stays inside its sentence instead of splitting the
     // paragraph around it. The src is kept as written; a relative path does
     // not resolve in the webview yet, so the image shows as broken but its
@@ -113,8 +115,11 @@ export function saveNote(
   editor: Editor,
   frontMatter: FrontMatter | null = null,
 ): string {
-  const body = editor.markdown!.serialize(
-    prepareForSave(getSerializationDocument(editor).toJSON()),
+  const body = cleanEscapes(
+    editor,
+    editor.markdown!.serialize(
+      prepareForSave(spellMarks(getSerializationDocument(editor).toJSON())),
+    ),
   );
   return (frontMatter?.raw ?? "") + body;
 }

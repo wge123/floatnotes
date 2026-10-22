@@ -57,25 +57,10 @@ describe("linkify rewrites converge after one save", () => {
   // linkify is the single place FloatNotes rewrites a note's markdown instead of
   // preserving it, so the rewrite has to be idempotent: a note may change shape
   // once, never drift on every subsequent save.
-  //
-  // it.fails.each: TipTap 3 spells a bare URL `[url](url)`, not `<url>`. The
-  // link syntax a save writes is ticket 05's (todo f9134a04); these flip back
-  // to `it.each` there. The v3 spelling is pinned below meanwhile.
-  it.fails.each([
+  it.each([
     ["https://example.com", "<https://example.com>"],
     ["see https://example.com here", "see <https://example.com> here"],
   ])("%j canonicalises once to %j", (source, canonical) => {
-    expect(roundTrip(source)).toBe(canonical);
-    expect(roundTrip(canonical)).toBe(canonical);
-  });
-
-  it.each([
-    ["https://example.com", "[https://example.com](https://example.com)"],
-    [
-      "see https://example.com here",
-      "see [https://example.com](https://example.com) here",
-    ],
-  ])("%j converges once to the v3 spelling %j", (source, canonical) => {
     expect(roundTrip(source)).toBe(canonical);
     expect(roundTrip(canonical)).toBe(canonical);
   });

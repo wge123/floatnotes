@@ -24,7 +24,7 @@ import {
 } from "./markdown-fixups";
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
-import { NoteUnderline, SpelledLink, angleLinks, cleanEscapes } from "./saved-spelling";
+import { NoteUnderline, SpelledLink, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -118,7 +118,7 @@ export function saveNote(
   const body = cleanEscapes(
     editor,
     editor.markdown!.serialize(
-      prepareForSave(angleLinks(getSerializationDocument(editor).toJSON())),
+      prepareForSave(spellMarks(getSerializationDocument(editor).toJSON())),
     ),
   );
   return (frontMatter?.raw ?? "") + body;

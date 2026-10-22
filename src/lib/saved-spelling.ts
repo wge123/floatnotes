@@ -8,12 +8,20 @@ import { NoteLink } from "./markdown-fixups";
  * read these notes: nvim, Obsidian-style wikilinks, GitHub.
  */
 
-/** Underline is written `<u>…</u>`; `++…++` still parses (the stock tokenizer). */
+/**
+ * Underline is written `<u>…</u>`; `++…++` still parses (the stock tokenizer).
+ * The text inside `<u>` is read back as raw HTML, not markdown, so an escape
+ * or a nested mark there would come back as literal characters. Such a run is
+ * flagged `plus` by `spellMarks` and keeps `++…++`, whose inside is markdown.
+ */
 export const NoteUnderline = Underline.extend({
   renderMarkdown(node, helpers) {
-    return `<u>${helpers.renderChildren(node)}</u>`;
+    const inner = helpers.renderChildren(node);
+    return node.attrs?.plus ? `++${inner}++` : `<u>${inner}</u>`;
   },
 });
+
+const NEEDS_MARKDOWN = /[\\`*_[\]~<>&]/;
 
 /** A scheme, then no whitespace or angle brackets: what `<…>` can hold. */
 const ANGLE_URL = /^[a-z][a-z0-9+.-]*:[^\s<>]*$/i;
@@ -40,8 +48,14 @@ function linkOnly(n: JSONContent): JSONContent | null {
   return mark.type === "link" && !mark.attrs?.title ? mark : null;
 }
 
-/** Serialization-time pass: flag each plain link run whose text is its href. */
-export function angleLinks(node: JSONContent): JSONContent {
+const isUnderlined = (n: JSONContent) =>
+  n.type === "text" && n.marks?.some((m) => m.type === "underline");
+
+/**
+ * Serialization-time pass: flag each plain link run whose text is its href
+ * (`angle`), and each underline run that `<u>` cannot hold (`plus`).
+ */
+export function spellMarks(node: JSONContent): JSONContent {
   if (!node.content) return node;
   const content: JSONContent[] = [];
   const kids = node.content;
@@ -67,7 +81,29 @@ export function angleLinks(node: JSONContent): JSONContent {
         continue;
       }
     }
-    content.push(angleLinks(kids[i]));
+    if (isUnderlined(kids[i])) {
+      let j = i;
+      while (j < kids.length && isUnderlined(kids[j])) j++;
+      const run = kids.slice(i, j);
+      const plus = run.some(
+        (n) => n.marks!.length > 1 || NEEDS_MARKDOWN.test(n.text ?? ""),
+      );
+      for (const n of run) {
+        content.push(
+          plus
+            ? {
+                ...n,
+                marks: n.marks!.map((m) =>
+                  m.type === "underline" ? { ...m, attrs: { ...m.attrs, plus: true } } : m,
+                ),
+              }
+            : n,
+        );
+      }
+      i = j - 1;
+      continue;
+    }
+    content.push(spellMarks(kids[i]));
   }
   return { ...node, content };
 }

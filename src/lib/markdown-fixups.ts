@@ -2,11 +2,11 @@ import { Code } from "@tiptap/extension-code";
 import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
 import { Paragraph } from "@tiptap/extension-paragraph";
-import { ListItem, TaskItem } from "@tiptap/extension-list";
+import { ListItem, OrderedList, TaskItem } from "@tiptap/extension-list";
 import type { JSONContent } from "@tiptap/core";
 
 /**
- * Seven places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
+ * Eight places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
  * editor on TipTap 2 kept. Each one was found by the corpus check
  * (scripts/corpus-check) against real notes.
  */
@@ -107,6 +107,39 @@ export const NoteListItem = ListItem.extend({
 
   renderMarkdown(node, helpers, context) {
     return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+  },
+});
+
+const orderedBase = OrderedList.config.markdownTokenizer!;
+// Cheap test of the first line, so a long note is not re-split at every block.
+const ORDERED_FIRST_LINE = /^[ \t]*[0-9a-zA-Z]{1,6}[.)][ \t]+/;
+
+/**
+ * TipTap 3's numbered-list tokenizer takes an item's text to start
+ * `marker.length + 1` columns in, which forgets the `.` of `1.`: one column
+ * short, so every nested block under a numbered item kept a stray leading
+ * space. A fenced code block gained a space on each line per load, and a
+ * fence right after a heading inside an item vanished. Shifting the nested
+ * lines left by one first makes its own arithmetic come out right.
+ */
+export const NoteOrderedList = OrderedList.extend({
+  markdownTokenizer: {
+    ...orderedBase,
+    tokenize(src, tokens, lexer) {
+      if (!ORDERED_FIRST_LINE.test(src)) return undefined;
+      const base = /^[ \t]*/.exec(src)![0].length;
+      const lines = src.split("\n");
+      const shifted = lines.map((line) => {
+        const lead = /^ */.exec(line)![0].length;
+        return lead >= base + 2 && line.trim() !== "" ? line.slice(1) : line;
+      });
+      const token = orderedBase.tokenize(shifted.join("\n"), tokens, lexer);
+      if (!token) return token;
+      // raw is the consumed lines; take them from the unshifted source.
+      const consumed = (token.raw ?? "").split("\n").length;
+      token.raw = lines.slice(0, consumed).join("\n");
+      return token;
+    },
   },
 });
 

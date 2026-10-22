@@ -17,6 +17,7 @@ import {
   NoteImage,
   NoteLink,
   NoteListItem,
+  NoteOrderedList,
   NoteParagraph,
   NoteTaskItem,
   prepareForSave,
@@ -49,6 +50,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       link: false,
       code: false,
       paragraph: false,
+      orderedList: false,
       trailingNode: false,
       hardBreak: false,
       listItem: false,
@@ -58,6 +60,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteListItem,
     NoteCode,
     NoteParagraph,
+    NoteOrderedList,
     NoteLink.configure({ openOnClick: false, autolink: true }),
     // Inline so an image stays inside its sentence instead of splitting the
     // paragraph around it. The src is kept as written; a relative path does

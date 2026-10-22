@@ -39,6 +39,26 @@ export const WikiLinkText = Extension.create({
  * flagged `plus` by `spellMarks` and keeps `++…++`, whose inside is markdown.
  */
 export const NoteUnderline = Underline.extend({
+  // The stock rule pairs any two `++` and trims the text between them, so
+  // "CAM++ (a) … CAM++ (b)" lost the space after the first `++`. Like
+  // emphasis: open before a non-space and not right after a letter or digit,
+  // close after a non-space.
+  markdownTokenizer: {
+    name: "underline",
+    level: "inline",
+    start(src) {
+      // marked calls this on the text after its first character, so a `++`
+      // with nothing before it here is not at a boundary.
+      const open = /([^\p{L}\p{N}+])\+\+(?=[^\s+])/u.exec(src);
+      return open ? open.index + open[1].length : -1;
+    },
+    tokenize(src, _tokens, lexer) {
+      const match = /^\+\+([^\s+](?:[\s\S]*?[^\s+])?)\+\+/.exec(src);
+      if (!match) return undefined;
+      return { type: "underline", raw: match[0], text: match[1], tokens: lexer.inlineTokens(match[1]) };
+    },
+  },
+
   renderMarkdown(node, helpers) {
     const inner = helpers.renderChildren(node);
     return node.attrs?.plus ? `++${inner}++` : `<u>${inner}</u>`;

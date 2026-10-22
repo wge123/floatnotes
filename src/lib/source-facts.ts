@@ -65,6 +65,14 @@ export function sourceFacts(text: string): SourceFacts {
   };
   const defs: string[] = [];
 
+  // Breaks seen since the last visible content. A break that ends its block is
+  // dropped by a save on purpose, so it only counts once content follows.
+  let pending = 0;
+  const commit = () => {
+    facts.hardBreaks += pending;
+    pending = 0;
+  };
+
   /** The text one inline run shows, one string per block. */
   const inline = (tokens: Token[] | undefined): string => {
     let out = "";
@@ -73,28 +81,33 @@ export function sourceFacts(text: string): SourceFacts {
         case "text":
         case "escape":
         case "codespan":
-          out += (t as Tokens.Text).tokens
-            ? inline((t as Tokens.Text).tokens)
-            : decode((t as Tokens.Text).text);
+          if ((t as Tokens.Text).tokens) out += inline((t as Tokens.Text).tokens);
+          else {
+            const shown = decode((t as Tokens.Text).text);
+            if (shown.trim() !== "") commit();
+            out += shown;
+          }
           break;
         case "br":
-          facts.hardBreaks++;
+          pending++;
           out += " ";
           break;
         case "html": {
           const raw = t.raw;
           if (BR_TAG.test(raw)) {
-            facts.hardBreaks++;
+            pending++;
             out += " ";
           } else if (!OWNED_TAG.test(raw)) facts.rawSources.push(raw);
           break;
         }
         case "link":
           facts.links.push((t as Tokens.Link).href);
+          commit();
           out += inline((t as Tokens.Link).tokens);
           break;
         case "image":
           facts.images.push((t as Tokens.Image).href);
+          commit();
           break;
         default:
           out += inline((t as Tokens.Generic).tokens);
@@ -104,11 +117,15 @@ export function sourceFacts(text: string): SourceFacts {
   };
 
   const blocks: string[] = [];
+  const inlineBlock = (tokens: Token[] | undefined): string => {
+    pending = 0;
+    return inline(tokens);
+  };
   const block = (tokens: Token[]): void => {
     for (const t of tokens) {
       switch (t.type) {
         case "html":
-          facts.rawSources.push(t.raw.replace(/\n+$/, ""));
+          facts.rawSources.push(t.raw.replace(/\s+$/, ""));
           break;
         case "code":
           blocks.push((t as Tokens.Code).text);
@@ -124,8 +141,8 @@ export function sourceFacts(text: string): SourceFacts {
           break;
         case "table": {
           const tbl = t as Tokens.Table;
-          for (const cell of tbl.header) blocks.push(inline(cell.tokens));
-          for (const row of tbl.rows) for (const cell of row) blocks.push(inline(cell.tokens));
+          for (const cell of tbl.header) blocks.push(inlineBlock(cell.tokens));
+          for (const row of tbl.rows) for (const cell of row) blocks.push(inlineBlock(cell.tokens));
           break;
         }
         case "blockquote":
@@ -141,7 +158,7 @@ export function sourceFacts(text: string): SourceFacts {
           // marked reads `[^1]: text` as a paragraph unless it is bare; the
           // editor keeps the definition verbatim as a raw block.
           if (FOOTNOTE_DEF.test(t.raw)) facts.rawSources.push(t.raw.replace(/\n+$/, ""));
-          blocks.push(inline((t as Tokens.Generic).tokens ?? [t]));
+          blocks.push(inlineBlock((t as Tokens.Generic).tokens ?? [t]));
           break;
         default:
           if ((t as Tokens.Generic).tokens) block((t as Tokens.Generic).tokens!);

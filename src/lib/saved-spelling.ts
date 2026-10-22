@@ -155,18 +155,51 @@ export function spellMarks(node: JSONContent): JSONContent {
 /**
  * The serializer backslash-escapes `\ ` * _ [ ] ~` in every text node, whether
  * or not the character could be read as syntax: `snake\_case`, `\[\[Note\]\]`.
+ * It also escapes `& < >` where plain-text-encoding.ts judged they might be
+ * read as markup, and writes a literal backslash as `\\` (dropped only at the
+ * end of a line, see `escapeOffsets`).
  * Orca's approach (rich-markdown-literal-serialization): an optional escape is
  * dropped only if re-parsing proves the document is unchanged.
  */
-const ESCAPABLE = new Set(["*", "_", "[", "]", "~", "`"]);
+const ESCAPABLE = new Set(["*", "_", "[", "]", "~", "`", "&", "<", ">", "\\"]);
 
-/** Offsets of each `\` that escapes a candidate character. `\\` pairs are skipped. */
+/** [start, end) offsets of fenced code: its text is verbatim, so a backslash there is never our escape. */
+function fencedRanges(md: string): [number, number][] {
+  const out: [number, number][] = [];
+  let open: { char: string; len: number; start: number } | null = null;
+  let at = 0;
+  for (const line of md.split("\n")) {
+    const fence = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (open === null) {
+      if (fence) open = { char: fence[1][0], len: fence[1].length, start: at };
+    } else if (fence && fence[1][0] === open.char && fence[1].length >= open.len && fence[2].trim() === "") {
+      out.push([open.start, at + line.length]);
+      open = null;
+    }
+    at += line.length + 1;
+  }
+  if (open) out.push([open.start, md.length]);
+  return out;
+}
+
+/**
+ * Offsets of each `\` that starts an escape of a candidate character, outside
+ * fenced code. A `\\` pair is a candidate too (its first backslash); either
+ * way the escaped character is never itself the start of an escape.
+ */
 function escapeOffsets(md: string): number[] {
+  const code = fencedRanges(md);
+  const inCode = (o: number) => code.some(([a, b]) => o >= a && o < b);
   const out: number[] = [];
   for (let i = 0; i < md.length - 1; i++) {
     if (md[i] !== "\\") continue;
-    if (ESCAPABLE.has(md[i + 1])) out.push(i);
-    i++; // the escaped character is never itself an escape
+    // A `\\` mid-line is how the author wrote a backslash (`C:\\dir`); only one
+    // that ends a line is the doubled form of a trailing `\`, which the editor
+    // reads as a plain character at the end of a block.
+    const lineEnd = i + 2 >= md.length || md[i + 2] === "\n";
+    const candidate = md[i + 1] === "\\" ? lineEnd : ESCAPABLE.has(md[i + 1]);
+    if (candidate && !inCode(i)) out.push(i);
+    i++;
   }
   return out;
 }

@@ -25,6 +25,7 @@ import {
 } from "./markdown-fixups";
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
+import { installPlainTextEncoder } from "./plain-text-encoding";
 import { RawBlock, RawInline } from "./raw-blocks";
 import { NoteUnderline, SpelledLink, WikiLinkText, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
@@ -40,6 +41,7 @@ import { TrailingParagraph, getSerializationDocument } from "./trailing-paragrap
  */
 export function buildEditorExtensions(placeholder = "Start writing…") {
   installParseSanitizer();
+  installPlainTextEncoder();
   return [
     // All six levels parse, so a note's #### survives a save; the toolbar
     // still offers only H1-H3 (FormatBar's HEADING_LEVELS).

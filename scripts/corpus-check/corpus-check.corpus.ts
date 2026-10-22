@@ -78,6 +78,10 @@ function withEditor<T>(text: string, fn: (e: Editor, fm: FrontMatter | null) => 
     contentType: "markdown",
   });
   try {
+    // A parser can build a document the schema rejects without complaint; the
+    // editor then throws on later edits. Report it as an error, never as a
+    // clean load.
+    editor.state.doc.check();
     return fn(editor, frontMatter);
   } finally {
     editor.destroy();

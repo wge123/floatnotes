@@ -1,5 +1,7 @@
 import { TaskList } from "@tiptap/extension-list";
 
+import { originalRaw } from "./tokenizer-raw";
+
 /**
  * Lets an EMPTY task item survive a round-trip through disk.
  *
@@ -37,9 +39,7 @@ export const EmptyTaskList = TaskList.extend({
       );
       const token = base.tokenize(padded.join("\n"), tokens, lexer);
       if (!token) return token;
-      // raw is the consumed lines, each ending in "\n".
-      const consumed = (token.raw ?? "").split("\n").length - 1;
-      token.raw = `${lines.slice(0, consumed).join("\n")}\n`;
+      token.raw = originalRaw(lines, token.raw ?? "");
       return token;
     },
   },

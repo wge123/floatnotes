@@ -6,6 +6,7 @@ import { ListItem, OrderedList, TaskItem } from "@tiptap/extension-list";
 import type { JSONContent } from "@tiptap/core";
 
 import { callParent } from "./parent-renderer";
+import { originalRaw } from "./tokenizer-raw";
 
 /**
  * Eight places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
@@ -140,8 +141,7 @@ export const NoteOrderedList = OrderedList.extend({
       const token = orderedBase.tokenize(shifted.join("\n"), tokens, lexer);
       if (!token) return token;
       // raw is the consumed lines; take them from the unshifted source.
-      const consumed = (token.raw ?? "").split("\n").length;
-      token.raw = lines.slice(0, consumed).join("\n");
+      token.raw = originalRaw(lines, token.raw ?? "");
       return token;
     },
   },

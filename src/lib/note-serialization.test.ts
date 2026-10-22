@@ -2,7 +2,12 @@ import { Editor } from "@tiptap/core";
 import { Selection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, saveNote } from "./editor-extensions";
+import {
+  buildEditorExtensions,
+  loadNote,
+  saveNote,
+} from "./editor-extensions";
+import type { FrontMatter } from "./front-matter";
 
 /**
  * Pins what a save writes today for notes shaped like the ones in ~/Notes, so
@@ -29,17 +34,23 @@ const cases = Object.entries(fixtures)
   .map(([path, source]) => [path.split("/").pop() as string, source] as const)
   .sort(([a], [b]) => a.localeCompare(b));
 
-function createEditor(content: string): Editor {
-  return new Editor({
+/** Load a whole note text, front matter included, through the note pair. */
+function createEditor(note: string): {
+  editor: Editor;
+  frontMatter: FrontMatter | null;
+} {
+  const { frontMatter, content } = loadNote(note);
+  const editor = new Editor({
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
   });
+  return { editor, frontMatter };
 }
 
-function save(markdown: string): string {
-  const editor = createEditor(markdown);
-  const out = saveNote(editor);
+function save(note: string): string {
+  const { editor, frontMatter } = createEditor(note);
+  const out = saveNote(editor, frontMatter);
   editor.destroy();
   return out;
 }
@@ -63,7 +74,7 @@ describe.each(cases)("saving %s", (name, source) => {
   // Serialization never validates the schema, so a doc the parser built wrong
   // would still save; check it explicitly.
   it("parses into a schema-valid document", () => {
-    const editor = createEditor(source);
+    const { editor } = createEditor(source);
     expect(() => editor.state.doc.check()).not.toThrow();
     editor.destroy();
   });
@@ -78,14 +89,14 @@ describe.each(cases)("saving %s", (name, source) => {
   // A real edit goes through a transaction; an untouched load does not. Type a
   // character and take it back so the doc is identical, and the bytes must be.
   it("writes the same bytes after an edit that is undone", () => {
-    const editor = createEditor(source);
-    const untouched = saveNote(editor);
+    const { editor, frontMatter } = createEditor(source);
+    const untouched = saveNote(editor, frontMatter);
     // Inside the last textblock: content.size is past the last block, where
     // an insert opens a new paragraph instead of typing.
     const end = Selection.atEnd(editor.state.doc).from;
     editor.chain().insertContentAt(end, "x").run();
     editor.chain().deleteRange({ from: end, to: end + 1 }).run();
-    expect(saveNote(editor)).toBe(untouched);
+    expect(saveNote(editor, frontMatter)).toBe(untouched);
     editor.destroy();
   });
 });
@@ -95,4 +106,61 @@ describe.each(cases)("saving %s", (name, source) => {
 it("pins what a save does to CRLF line endings", () => {
   const out = save("# Title\r\n\r\nline one\r\nline two\r\n");
   expect(JSON.stringify(out)).toMatchInlineSnapshot(`""# Title\\n\\nline one line two""`);
+});
+
+// ADR 0018: front matter is split off before the editor sees the note and
+// written back unchanged, so an edit in the body never touches it.
+describe("front matter", () => {
+  const fm = "---\ntitle: Weekly review\ntags: [review, weekly]\n---\n\n";
+
+  it("stays byte for byte after an edit in the body", () => {
+    const { editor, frontMatter } = createEditor(`${fm}# Hi\n\nbody`);
+    const end = Selection.atEnd(editor.state.doc).from;
+    editor.chain().insertContentAt(end, "!").run();
+    expect(saveNote(editor, frontMatter)).toBe(`${fm}# Hi\n\nbody!`);
+    editor.destroy();
+  });
+
+  it("is never shown to the editor as body text", () => {
+    const { editor } = createEditor(`${fm}# Hi`);
+    expect(editor.getText()).toBe("Hi");
+    editor.destroy();
+  });
+
+  it("keeps a CRLF note's front matter exactly", () => {
+    const note = "---\r\na: 1\r\n---\r\n\r\nbody";
+    expect(save(note)).toBe(note);
+  });
+
+  it("keeps a front-matter-only note", () => {
+    expect(save("---\na: 1\n---\n")).toBe("---\na: 1\n---\n");
+    expect(save("---\na: 1\n---")).toBe("---\na: 1\n---");
+  });
+
+  it("treats a later horizontal rule as body, not front matter", () => {
+    expect(loadNote("# Title\n\n---\n\ntext\n---\n").frontMatter).toBeNull();
+    expect(save("# Title\n\n---\n\ntext")).toBe("# Title\n\n---\n\ntext");
+  });
+
+  it("is not front matter without a closing fence", () => {
+    expect(loadNote("---\ntitle: x\n\nbody").frontMatter).toBeNull();
+    expect(loadNote("---").frontMatter).toBeNull();
+  });
+
+  it("is not front matter when the fence line has other text", () => {
+    expect(loadNote("--- \na: 1\n---\n").frontMatter).toBeNull();
+    expect(loadNote("----\na: 1\n---\n").frontMatter).toBeNull();
+    expect(loadNote("\n---\na: 1\n---\n").frontMatter).toBeNull();
+  });
+
+  it("saves a note without front matter as before", () => {
+    expect(loadNote("# Plain\n\ntext").frontMatter).toBeNull();
+    expect(save("# Plain\n\ntext")).toBe("# Plain\n\ntext");
+  });
+
+  it("exposes the raw YAML for editing", () => {
+    expect(loadNote(`${fm}body`).frontMatter?.yaml).toBe(
+      "title: Weekly review\ntags: [review, weekly]",
+    );
+  });
 });

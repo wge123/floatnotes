@@ -1,7 +1,11 @@
 import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
-import { buildEditorExtensions, saveNote } from "./editor-extensions";
+import {
+  buildEditorExtensions,
+  loadNote,
+  saveNote,
+} from "./editor-extensions";
 
 function createEditor(content = ""): Editor {
   return new Editor({
@@ -13,8 +17,9 @@ function createEditor(content = ""): Editor {
 
 /** Parse markdown into the editor, serialize it back out. */
 function roundTrip(markdown: string): string {
-  const editor = createEditor(markdown);
-  const out = saveNote(editor);
+  const { frontMatter, content } = loadNote(markdown);
+  const editor = createEditor(content);
+  const out = saveNote(editor, frontMatter);
   editor.destroy();
   return out;
 }

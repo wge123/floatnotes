@@ -5,6 +5,8 @@ import { Paragraph } from "@tiptap/extension-paragraph";
 import { ListItem, OrderedList, TaskItem } from "@tiptap/extension-list";
 import type { JSONContent } from "@tiptap/core";
 
+import { callParent } from "./parent-renderer";
+
 /**
  * Eight places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
  * editor on TipTap 2 kept. Each one was found by the corpus check
@@ -20,7 +22,7 @@ import type { JSONContent } from "@tiptap/core";
  */
 export const NoteImage = Image.extend({
   renderMarkdown(node, helpers, context) {
-    const image = this.parent?.(node, helpers, context) ?? "";
+    const image = callParent("Image", this.parent, node, helpers, context);
     const href = node.attrs?.linkHref as string | undefined;
     if (!href) return image;
     const title = node.attrs?.linkTitle as string | undefined;
@@ -41,7 +43,7 @@ export const NoteParagraph = Paragraph.extend({
     if (tokens.length === 1 && tokens[0].type === "image") {
       return { type: "paragraph", content: helpers.parseInline(tokens) };
     }
-    return this.parent?.(token, helpers) ?? [];
+    return callParent("Paragraph", this.parent, token, helpers);
   },
 });
 
@@ -92,7 +94,9 @@ export const NoteListItem = ListItem.extend({
       token.tokens &&
       token.tokens.some((t, i) => i > 0 && t.type === "text" && t.tokens)
     ) {
-      return this.parent?.(
+      return callParent(
+        "ListItem",
+        this.parent,
         {
           ...token,
           tokens: token.tokens.map((t) =>
@@ -100,13 +104,13 @@ export const NoteListItem = ListItem.extend({
           ),
         },
         helpers,
-      ) ?? [];
+      );
     }
-    return this.parent?.(token, helpers) ?? [];
+    return callParent("ListItem", this.parent, token, helpers);
   },
 
   renderMarkdown(node, helpers, context) {
-    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+    return indentContinuation(callParent("ListItem", this.parent, node, helpers, context), node, helpers);
   },
 });
 
@@ -146,7 +150,7 @@ export const NoteOrderedList = OrderedList.extend({
 /** A task item has the same continuation-line problem as a bullet. */
 export const NoteTaskItem = TaskItem.extend({
   renderMarkdown(node, helpers, context) {
-    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+    return indentContinuation(callParent("TaskItem", this.parent, node, helpers, context), node, helpers);
   },
 });
 

@@ -2,6 +2,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { Underline } from "@tiptap/extension-underline";
 
 import { NoteLink } from "./markdown-fixups";
+import { callParent } from "./parent-renderer";
 
 /**
  * Spellings a save keeps from before TipTap 3 (ADR 0019), because other tools
@@ -38,7 +39,7 @@ export const SpelledLink = NoteLink.extend({
     if (node.attrs?.angle) {
       return `<${node.attrs.href}${helpers.renderChildren(node)}>`;
     }
-    return this.parent?.(node, helpers, context) ?? "";
+    return callParent("Link", this.parent, node, helpers, context);
   },
 });
 
@@ -153,7 +154,7 @@ function normalize(node: JSONContent): JSONContent {
 
 export function cleanEscapes(editor: Editor, md: string): string {
   const manager = editor.markdown;
-  if (!manager) return md;
+  if (!manager) throw new Error("cleanEscapes: the editor has no markdown manager");
   const key = (text: string) => JSON.stringify(normalize(manager.parse(text)));
   const baseline = key(md);
   const keeps = (candidate: string) => key(candidate) === baseline;

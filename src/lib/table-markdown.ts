@@ -1,5 +1,7 @@
 import { Table } from "@tiptap/extension-table";
 
+import { callParent } from "./parent-renderer";
+
 /**
  * TipTap 3's table serializer wraps its output in a leading and a trailing
  * newline, and the block joiner then adds its own blank line, so a table gets
@@ -9,7 +11,7 @@ import { Table } from "@tiptap/extension-table";
  */
 export const NoteTable = Table.extend({
   renderMarkdown(node, helpers, context) {
-    const out = this.parent?.(node, helpers, context) ?? "";
+    const out = callParent("Table", this.parent, node, helpers, context);
     // Inside a list item the leading newline is what separates the table from
     // the item's text (a table cannot follow a paragraph line directly), so
     // only the top level loses it.

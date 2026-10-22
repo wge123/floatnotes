@@ -52,6 +52,30 @@ const OWNED_TAG = /^<\/?(?:br|u)\b/i;
 const BR_TAG = /^<br\b/i;
 const FOOTNOTE_DEF = /^ {0,3}\[\^[^\]\s]+\]:/;
 
+/**
+ * Two readings of the SAME text that marked and the editor disagree on, made
+ * alike before the lexer sees the text (applied to the original and to the
+ * saved text, so neither side is favoured):
+ *
+ * - GFM cuts a table cell at every unescaped pipe, a code span's included, and
+ *   drops the cells past the header's width. The editor keeps the whole cell
+ *   and a save writes the pipe escaped, so a pipe inside a code span on a
+ *   table row is read as escaped.
+ * - An empty list item whose marker is the whole line: marked reads `1.` at the
+ *   end of a file as an empty item, and `1. ` (a save writes the space) as a
+ *   paragraph "1.". The trailing space is dropped.
+ */
+function alignReadings(body: string): string {
+  return body
+    .split("\n")
+    .map((line) => {
+      if (/^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+$/.test(line)) return line.replace(/[ \t]+$/, "");
+      if (!/^ {0,3}\|/.test(line)) return line;
+      return line.replace(/(`+)(.*?[^`])\1(?!`)/g, (span) => span.replace(/(?<!\\)\|/g, "\\|"));
+    })
+    .join("\n");
+}
+
 export function sourceFacts(text: string): SourceFacts {
   const { frontMatter, body } = splitFrontMatter(text);
   const facts: SourceFacts = {
@@ -166,7 +190,7 @@ export function sourceFacts(text: string): SourceFacts {
     }
   };
 
-  block(new Lexer({ gfm: true }).lex(body));
+  block(new Lexer({ gfm: true }).lex(alignReadings(body)));
   facts.words = blocks.flatMap((b) => b.split(/\s+/).filter((w) => w !== ""));
   const used = new Set([...facts.links, ...facts.images]);
   facts.unusedDefs = defs.filter((href) => !used.has(href));

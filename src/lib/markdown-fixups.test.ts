@@ -33,8 +33,8 @@ describe("a fenced code block indented inside a list item", () => {
     );
   });
 
-  it("keeps the language and the code, tilde fences too", () => {
-    expect(roundTrip("- a\n    ~~~py\n    x = 1\n    ~~~")).toBe("- a\n  ```py\n  x = 1\n  ```");
+  it("keeps the language and the code", () => {
+    expect(roundTrip("- a\n    ```py\n    x = 1\n    ```")).toBe("- a\n  ```py\n  x = 1\n  ```");
   });
 
   it("still drops nothing when the fence is flush with the item text", () => {

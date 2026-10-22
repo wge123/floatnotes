@@ -28,6 +28,20 @@ describe("saves keep today's spelling", () => {
     expect(roundTrip(source)).toBe(source);
   });
 
+  // A reference definition `[x]: url` makes marked read the inner `[x]` of
+  // `[[x]]` as a link. Wikilinks are literal text whatever the note defines.
+  it.each([
+    ["[[x]]\n\n[x]: https://example.com", "[[x]]"],
+    ["see [[x]] and [[y]] here\n\n[x]: https://x.example\n[y]: https://y.example", "see [[x]] and [[y]] here"],
+    ["[[folder/Note|alias]]\n\n[folder/Note|alias]: https://e.com", "[[folder/Note|alias]]"],
+    ["[[x]] and [x] and [[x]]\n\n[x]: https://example.com", "[[x]] and [x](https://example.com) and [[x]]"],
+  ])("keeps the wikilink in %j literal even with a matching definition", (source, expected) => {
+    const out = roundTrip(source);
+    expect(out).toContain(expected);
+    expect(out).not.toContain("\\[");
+    expect(out).not.toContain("[[x](");
+  });
+
   it.each(["snake_case_word", "file_name.md", "a_b and c_d_e"])(
     "keeps %j without \\_",
     (source) => {

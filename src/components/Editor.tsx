@@ -19,8 +19,8 @@ export interface EditorProps {
   value: string;
   /** Fires with the full markdown document on every edit. */
   onChange: (markdown: string) => void;
-  /** Fires once when the underlying TipTap editor is ready. */
-  onReady?: (editor: TiptapEditor) => void;
+  /** Fires with the live TipTap editor, and with null when it is destroyed. */
+  onReady?: (editor: TiptapEditor | null) => void;
   placeholder?: string;
 }
 
@@ -46,10 +46,20 @@ export default function Editor({
     content: loaded.content,
     // A bare string is HTML in TipTap 3.
     contentType: "markdown",
-    onCreate: ({ editor }) => onReady?.(editor),
     onUpdate: ({ editor }) =>
       onChange(saveNote(editor, frontMatterRef.current)),
   });
+
+  // Report the instance useEditor returns, not onCreate's: under StrictMode
+  // TipTap 3 destroys and recreates the editor, so the first one onCreate saw
+  // is dead. Cleanup reports null so the owner never keeps a destroyed one.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  useEffect(() => {
+    if (!editor) return;
+    onReadyRef.current?.(editor);
+    return () => onReadyRef.current?.(null);
+  }, [editor]);
 
   // External value changes (file watcher, note switch) — guarded so the echo
   // of our own onChange never resets the caret mid-typing.

@@ -970,9 +970,9 @@ function App() {
           />
         )}
       </div>
-      {overlays.includes("find") && editorRef.current && (
+      {overlays.includes("find") && editorInstance && (
         <FindBar
-          editor={editorRef.current}
+          editor={editorInstance}
           onClose={() => closeOverlay("find")}
         />
       )}

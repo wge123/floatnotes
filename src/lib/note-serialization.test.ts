@@ -62,7 +62,7 @@ function save(note: string): string {
  * - quotes-and-tables: `a \| b` in a cell saves unescaped, so the next save
  *   reads an extra column and drops the row's last cell.
  */
-const KEEPS_CHANGING = new Set(["list-markers.md", "quotes-and-tables.md"]);
+const KEEPS_CHANGING = new Set(["list-markers.md"]);
 
 describe.each(cases)("saving %s", (name, source) => {
   it("writes the pinned bytes", async () => {

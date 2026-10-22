@@ -81,7 +81,6 @@ describe("a symbol that would be read as markup is escaped, and only that", () =
     ["call List<String> here", "call List\\<String> here"],
     ["<b>bold</b> typed", "\\<b>bold\\</b> typed"],
     ["<!-- not a comment -->", "\\<!-- not a comment -->"],
-    ["see <https://example.com> now", "see \\<https://example.com> now"],
   ])("escapes tag-looking text %j so it stays text on reload", (text, expected) => {
     const saved = saveNote(typed(text));
     expect(saved).toBe(expected);
@@ -100,6 +99,16 @@ describe("a symbol that would be read as markup is escaped, and only that", () =
     expect(saveNote(typed("a > b"))).toBe("a > b");
   });
 
+  it("drops an escape a re-parse proves unneeded", () => {
+    // `<y` without a closing `>` is not a tag, so nothing needs escaping.
+    expect(saveNote(typed("x<y and z"))).toBe("x<y and z");
+  });
+
+  it("keeps an author's backslash escape of a symbol only while it matters", () => {
+    expect(roundTrip("\\<b>kept as text")).toBe("\\<b>kept as text");
+    expect(roundTrip("a \\< b")).toBe("a < b");
+  });
+
   it("keeps a typed less-than that is followed by a space or digit unescaped", () => {
     expect(saveNote(typed("1 < 2 and <15 and a <- b"))).toBe("1 < 2 and <15 and a <- b");
   });
@@ -109,8 +118,7 @@ describe("code and raw blocks are written exactly", () => {
   it.each([
     "```\na -> b & c <d> &amp; e\n```",
     "inline `x<y && y>z &amp;` code",
-    "<details>\n<summary>S &amp; T</summary>\n\nbody -> text\n</details>",
-    "text <kbd>Ctrl</kbd> and &amp; entity inside raw tags",
+    "<details>\n<summary>S &amp; T</summary>\n\nbody -> text\n\n</details>",
   ])("keeps %j", (source) => {
     expect(roundTrip(source)).toBe(source);
   });

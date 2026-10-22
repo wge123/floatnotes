@@ -1,6 +1,8 @@
 ---
-
-## title: Weekly review tags: \[review, weekly\] created: 2026-10-01
+title: Weekly review
+tags: [review, weekly]
+created: 2026-10-01
+---
 
 # Weekly review
 

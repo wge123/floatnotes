@@ -119,6 +119,35 @@ describe("a wrapped paragraph inside a list item", () => {
   });
 });
 
+describe("blocks nested under a numbered list item", () => {
+  it("keeps a code fence's text exact instead of gaining a space per load", () => {
+    const note = "1. step\n   ```bash\n   pip install x\n   ```\n2. two";
+    const once = roundTrip(note);
+    expect(once).toBe(note);
+    expect(roundTrip(once)).toBe(note);
+    expect(editor.getText()).toContain("pip install x");
+    expect(editor.getText()).not.toContain(" pip install");
+  });
+
+  it("keeps a fence that follows a heading inside the item", () => {
+    const note = "2. item\n   #### Windows\n   ```\n   *Pre: ok.*\n   ```\n3. next";
+    expect(roundTrip(note)).toBe(note);
+  });
+
+  it("handles a two-digit marker", () => {
+    const note = "10. step\n    ```\n    cmd\n    ```\n11. two";
+    const once = roundTrip(note);
+    expect(roundTrip(once)).toBe(once);
+    expect(editor.getText()).not.toContain(" cmd");
+  });
+
+  it("still nests a numbered list under a numbered item", () => {
+    const note = "1. one\n   1. inner a\n   2. inner b\n2. two";
+    const once = roundTrip(note);
+    expect(once).toBe(note);
+  });
+});
+
 describe("one markdown parser per editor", () => {
   const registered = () => {
     const e = new Editor({

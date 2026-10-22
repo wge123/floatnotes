@@ -53,7 +53,10 @@ export function matchFootnoteDefinition(src: string): string | null {
 }
 
 function rawSource(value: unknown): string {
-  return typeof value === "string" ? value : "";
+  if (typeof value !== "string") {
+    throw new TypeError(`raw block value must be a string, got ${typeof value}`);
+  }
+  return value;
 }
 
 /** Typing over a selected raw node would replace it; it is read-only. */

@@ -1,9 +1,13 @@
 import { Code } from "@tiptap/extension-code";
+import { CodeBlock } from "@tiptap/extension-code-block";
 import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
 import { Paragraph } from "@tiptap/extension-paragraph";
 import { ListItem, OrderedList, TaskItem } from "@tiptap/extension-list";
 import type { JSONContent } from "@tiptap/core";
+
+import { callParent } from "./parent-renderer";
+import { originalRaw } from "./tokenizer-raw";
 
 /**
  * Eight places where @tiptap/markdown 3.31.4 loses or corrupts a note that the
@@ -20,7 +24,7 @@ import type { JSONContent } from "@tiptap/core";
  */
 export const NoteImage = Image.extend({
   renderMarkdown(node, helpers, context) {
-    const image = this.parent?.(node, helpers, context) ?? "";
+    const image = callParent("Image", this.parent, node, helpers, context);
     const href = node.attrs?.linkHref as string | undefined;
     if (!href) return image;
     const title = node.attrs?.linkTitle as string | undefined;
@@ -41,7 +45,7 @@ export const NoteParagraph = Paragraph.extend({
     if (tokens.length === 1 && tokens[0].type === "image") {
       return { type: "paragraph", content: helpers.parseInline(tokens) };
     }
-    return this.parent?.(token, helpers) ?? [];
+    return callParent("Paragraph", this.parent, token, helpers);
   },
 });
 
@@ -54,6 +58,21 @@ export const NoteParagraph = Paragraph.extend({
  * back as it read it.
  */
 export const NoteCode = Code.extend({ excludes: "" });
+
+/**
+ * The stock code block keeps a fenced token only when its source starts with
+ * the fence, but marked hands over a fence inside a list item with the item's
+ * indentation still on it (`- a`, then a fence four spaces in), so the whole
+ * block, code included, was dropped on load. Strip the indentation first.
+ */
+export const NoteCodeBlock = CodeBlock.extend({
+  parseMarkdown(token, helpers) {
+    const raw = token.raw ?? "";
+    const fence = /^ {1,3}(?=```|~~~)/.exec(raw);
+    const stripped = fence ? { ...token, raw: raw.slice(fence[0].length) } : token;
+    return callParent("CodeBlock", this.parent, stripped, helpers);
+  },
+});
 
 /**
  * `[![alt](img)](https://example.com)` loses its link on load: the markdown
@@ -92,7 +111,9 @@ export const NoteListItem = ListItem.extend({
       token.tokens &&
       token.tokens.some((t, i) => i > 0 && t.type === "text" && t.tokens)
     ) {
-      return this.parent?.(
+      return callParent(
+        "ListItem",
+        this.parent,
         {
           ...token,
           tokens: token.tokens.map((t) =>
@@ -100,19 +121,19 @@ export const NoteListItem = ListItem.extend({
           ),
         },
         helpers,
-      ) ?? [];
+      );
     }
-    return this.parent?.(token, helpers) ?? [];
+    return callParent("ListItem", this.parent, token, helpers);
   },
 
   renderMarkdown(node, helpers, context) {
-    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+    return indentContinuation(callParent("ListItem", this.parent, node, helpers, context), node, helpers);
   },
 });
 
 const orderedBase = OrderedList.config.markdownTokenizer!;
 // Cheap test of the first line, so a long note is not re-split at every block.
-const ORDERED_FIRST_LINE = /^[ \t]*[0-9a-zA-Z]{1,6}[.)][ \t]+/;
+const ORDERED_FIRST_LINE = /^[ \t]*[0-9]{1,9}[.)][ \t]+/;
 
 /**
  * TipTap 3's numbered-list tokenizer takes an item's text to start
@@ -128,7 +149,18 @@ export const NoteOrderedList = OrderedList.extend({
     tokenize(src, tokens, lexer) {
       if (!ORDERED_FIRST_LINE.test(src)) return undefined;
       const base = /^[ \t]*/.exec(src)![0].length;
-      const lines = src.split("\n");
+      const all = src.split("\n");
+      // The list ends at the first non-blank line at its own indentation that
+      // does not start with a digit marker: the stock tokenizer would take
+      // `No. text` or `Mr. Smith` there as a lettered item.
+      const end = all.findIndex(
+        (line, i) =>
+          i > 0 &&
+          line.trim() !== "" &&
+          /^[ \t]*/.exec(line)![0].length <= base &&
+          !ORDERED_FIRST_LINE.test(line),
+      );
+      const lines = end < 0 ? all : all.slice(0, end);
       const shifted = lines.map((line) => {
         const lead = /^ */.exec(line)![0].length;
         return lead >= base + 2 && line.trim() !== "" ? line.slice(1) : line;
@@ -136,8 +168,7 @@ export const NoteOrderedList = OrderedList.extend({
       const token = orderedBase.tokenize(shifted.join("\n"), tokens, lexer);
       if (!token) return token;
       // raw is the consumed lines; take them from the unshifted source.
-      const consumed = (token.raw ?? "").split("\n").length;
-      token.raw = lines.slice(0, consumed).join("\n");
+      token.raw = originalRaw(lines, token.raw ?? "");
       return token;
     },
   },
@@ -146,7 +177,7 @@ export const NoteOrderedList = OrderedList.extend({
 /** A task item has the same continuation-line problem as a bullet. */
 export const NoteTaskItem = TaskItem.extend({
   renderMarkdown(node, helpers, context) {
-    return indentContinuation(this.parent?.(node, helpers, context) ?? "", node, helpers);
+    return indentContinuation(callParent("TaskItem", this.parent, node, helpers, context), node, helpers);
   },
 });
 

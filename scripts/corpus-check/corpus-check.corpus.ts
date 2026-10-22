@@ -24,6 +24,13 @@
  * image srcs, the count of hard line breaks, and the front matter as a string.
  * Pure restyling (`*` vs `-`, `__b__` vs `**b**`, reference vs inline links,
  * table padding) changes none of these.
+ *
+ * A second, editor-blind set of facts (src/lib/source-facts.ts) is read with
+ * marked's lexer from the ORIGINAL text and from the SAVED text: visible
+ * words, link hrefs, image srcs, hard breaks, unused reference definitions,
+ * front matter, and every raw HTML / comment / footnote source compared
+ * EXACTLY (not whitespace-collapsed). Either set differing is "content lost";
+ * reasons from this set start with "source" or "raw HTML".
  * Separately flagged: non-convergent (save(save(x)) != save(x)).
  *
  * Env: CORPUS_NOTES_DIR (required), CORPUS_REPORT (optional file for the
@@ -52,6 +59,7 @@ import {
   saveNote,
 } from "../../src/lib/editor-extensions";
 import type { FrontMatter } from "../../src/lib/front-matter";
+import { sourceFacts } from "../../src/lib/source-facts";
 
 const expand = (p: string) => (p.startsWith("~") ? homedir() + p.slice(1) : p);
 
@@ -167,7 +175,17 @@ it("reports every note a save would change", { timeout: 30 * 60_000 }, () => {
         saveNote(e, fm),
         readFacts(e, fm),
       ] as const);
-      const r = classifyNote({ original, saved, resaved, before, after });
+      // Blind to the editor: the same facts read from the original and the
+      // saved TEXT, so a drop on load cannot hide from both sides.
+      const r = classifyNote({
+        original,
+        saved,
+        resaved,
+        before,
+        after,
+        sourceBefore: sourceFacts(original),
+        sourceAfter: sourceFacts(saved),
+      });
       rows.push({ path, cls: r.class, reasons: r.reasons, nonConvergent: r.nonConvergent });
     } catch (err) {
       errors.push(`${path}: ${(err as Error).message}`);

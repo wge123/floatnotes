@@ -8,13 +8,14 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
-import { EmptyTaskList } from "./empty-task-parse";
+import { EmptyTaskList } from "./empty-task-list";
 import { LinkClick } from "./link-click";
 import { MarkdownPaste } from "./markdown-paste";
 import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
 import {
   NoteCode,
+  NoteCodeBlock,
   NoteImage,
   NoteListItem,
   NoteOrderedList,
@@ -25,7 +26,7 @@ import {
 import { NoteTable } from "./table-markdown";
 import { installParseSanitizer } from "./markdown-sanitize";
 import { RawBlock, RawInline } from "./raw-blocks";
-import { NoteUnderline, SpelledLink, spellMarks, cleanEscapes } from "./saved-spelling";
+import { NoteUnderline, SpelledLink, WikiLinkText, spellMarks, cleanEscapes } from "./saved-spelling";
 import { TaskListInputRule } from "./task-input-rule";
 import { TrailingParagraph, getSerializationDocument } from "./trailing-paragraph";
 
@@ -51,6 +52,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       link: false,
       code: false,
+      codeBlock: false,
       paragraph: false,
       orderedList: false,
       trailingNode: false,
@@ -62,6 +64,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteHardBreak,
     NoteListItem,
     NoteCode,
+    NoteCodeBlock,
     NoteParagraph,
     NoteOrderedList,
     NoteUnderline,
@@ -83,6 +86,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     NoteTable.configure({ resizable: false }),
     RawBlock,
     RawInline,
+    WikiLinkText,
     Placeholder.configure({ placeholder }),
     // A private marked instance per editor. The default is one shared global
     // that every editor registers its tokenizers into, so each editor built in

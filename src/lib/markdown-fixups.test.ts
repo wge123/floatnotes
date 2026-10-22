@@ -23,6 +23,26 @@ function roundTrip(note: string): string {
 
 afterEach(() => editor?.destroy());
 
+// Found by the editor-blind corpus check (review of todo f9134a04): the stock
+// code block drops a fenced block whose fence is indented, which marked hands
+// over when a fence sits inside a list item.
+describe("a fenced code block indented inside a list item", () => {
+  it("keeps the code under a bullet written with four spaces", () => {
+    expect(roundTrip("- Download\n    ```\n    code1\n    ```\n- Last")).toBe(
+      "- Download\n  ```\n  code1\n  ```\n- Last",
+    );
+  });
+
+  it("keeps the language and the code", () => {
+    expect(roundTrip("- a\n    ```py\n    x = 1\n    ```")).toBe("- a\n  ```py\n  x = 1\n  ```");
+  });
+
+  it("still drops nothing when the fence is flush with the item text", () => {
+    const note = "- Download\n  ```\n  code1\n  ```\n- Last";
+    expect(roundTrip(note)).toBe(note);
+  });
+});
+
 describe("a linked image (README badge)", () => {
   const badge = "[![PyPI](https://img.example/p.svg)](https://pypi.example/p/)";
 
@@ -170,5 +190,27 @@ describe("one markdown parser per editor", () => {
     const first = registered();
     expect(first).toBeGreaterThan(0);
     expect(registered()).toBe(first);
+  });
+});
+
+// Found by the editor-blind corpus check: TipTap 3's numbered-list tokenizer
+// also accepts letters and roman numerals as markers, so a sentence that
+// starts with a short word and a full stop became a list item and the word
+// turned into "1.". Markdown only has digits.
+describe("a line that starts with a word and a full stop", () => {
+  it.each([
+    "No. One Pro license works on all platforms.",
+    "No. Hooks hand events off and return immediately.",
+    "Mr. Smith came.",
+    "I. Introduction",
+    "a. first\nb. second",
+    "iv) fourth",
+  ])("stays a paragraph: %j", (note) => {
+    expect(roundTrip(note)).toBe(note);
+  });
+
+  it("keeps a real numbered list, with a paragraph after a heading", () => {
+    const note = "### Q\n\n1. one\n2. two\n\nNo. Not a list.";
+    expect(roundTrip(note)).toBe(note);
   });
 });

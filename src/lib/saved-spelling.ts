@@ -1,12 +1,36 @@
-import type { Editor, JSONContent } from "@tiptap/core";
+import { Extension, type Editor, type JSONContent } from "@tiptap/core";
 import { Underline } from "@tiptap/extension-underline";
 
 import { NoteLink } from "./markdown-fixups";
+import { callParent } from "./parent-renderer";
 
 /**
  * Spellings a save keeps from before TipTap 3 (ADR 0019), because other tools
  * read these notes: nvim, Obsidian-style wikilinks, GitHub.
  */
+
+/**
+ * `[[Note]]` is a wikilink, plain text to this editor. marked reads the inner
+ * `[Note]` as a reference link whenever the note defines `[Note]: url`, which
+ * left `[` + a link + `]` on load. This tokenizer claims the whole `[[…]]`
+ * first, so the lexer never gets to read it as a link, and it comes through as
+ * the text it is. (On save, `cleanEscapes` then proves the brackets need no
+ * backslashes, because the parse of `[[Note]]` is that same text.)
+ */
+export const WikiLinkText = Extension.create({
+  name: "wikiLinkText",
+  markdownTokenName: "wikiLinkText",
+  markdownTokenizer: {
+    name: "wikiLinkText",
+    level: "inline",
+    start: (src: string) => src.indexOf("[["),
+    tokenize(src: string) {
+      const raw = /^\[\[[^[\]\n]+\]\](?![(\[])/.exec(src)?.[0];
+      return raw ? { type: "wikiLinkText", raw, text: raw } : undefined;
+    },
+  },
+  parseMarkdown: (token: { text?: string }) => ({ type: "text", text: token.text ?? "" }),
+});
 
 /**
  * Underline is written `<u>…</u>`; `++…++` still parses (the stock tokenizer).
@@ -15,6 +39,26 @@ import { NoteLink } from "./markdown-fixups";
  * flagged `plus` by `spellMarks` and keeps `++…++`, whose inside is markdown.
  */
 export const NoteUnderline = Underline.extend({
+  // The stock rule pairs any two `++` and trims the text between them, so
+  // "CAM++ (a) … CAM++ (b)" lost the space after the first `++`. Like
+  // emphasis: open before a non-space and not right after a letter or digit,
+  // close after a non-space.
+  markdownTokenizer: {
+    name: "underline",
+    level: "inline",
+    start(src) {
+      // marked calls this on the text after its first character, so a `++`
+      // with nothing before it here is not at a boundary.
+      const open = /([^\p{L}\p{N}+])\+\+(?=[^\s+])/u.exec(src);
+      return open ? open.index + open[1].length : -1;
+    },
+    tokenize(src, _tokens, lexer) {
+      const match = /^\+\+([^\s+](?:[\s\S]*?[^\s+])?)\+\+/.exec(src);
+      if (!match) return undefined;
+      return { type: "underline", raw: match[0], text: match[1], tokens: lexer.inlineTokens(match[1]) };
+    },
+  },
+
   renderMarkdown(node, helpers) {
     const inner = helpers.renderChildren(node);
     return node.attrs?.plus ? `++${inner}++` : `<u>${inner}</u>`;
@@ -38,7 +82,7 @@ export const SpelledLink = NoteLink.extend({
     if (node.attrs?.angle) {
       return `<${node.attrs.href}${helpers.renderChildren(node)}>`;
     }
-    return this.parent?.(node, helpers, context) ?? "";
+    return callParent("Link", this.parent, node, helpers, context);
   },
 });
 
@@ -153,7 +197,7 @@ function normalize(node: JSONContent): JSONContent {
 
 export function cleanEscapes(editor: Editor, md: string): string {
   const manager = editor.markdown;
-  if (!manager) return md;
+  if (!manager) throw new Error("cleanEscapes: the editor has no markdown manager");
   const key = (text: string) => JSON.stringify(normalize(manager.parse(text)));
   const baseline = key(md);
   const keeps = (candidate: string) => key(candidate) === baseline;

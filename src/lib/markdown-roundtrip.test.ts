@@ -112,9 +112,9 @@ const squeeze = (md: string) =>
   md.replace(/ +$/gm, "").replace(/ +/g, " ").replace(/-{3,}/g, "---");
 
 /** Press a key through the editor's real ProseMirror keymap chain. */
-function pressKey(editor: Editor, key: string): void {
+function pressKey(editor: Editor, key: string, init: KeyboardEventInit = {}): void {
   editor.view.someProp("handleKeyDown", (handler) =>
-    handler(editor.view, new KeyboardEvent("keydown", { key })),
+    handler(editor.view, new KeyboardEvent("keydown", { key, ...init })),
   );
 }
 
@@ -226,8 +226,63 @@ describe("markdown tables", () => {
     editor.destroy();
   });
 
-  // Control for the test above: the same keypress outside a table must still
-  // split the block, or the assertion above would pass on a dead keymap.
+  // Story 26: Tab and Shift-Tab walk between cells (TipTap's table keymap).
+  // The move selects the whole target cell, so typing replaces its text; the
+  // saved table shows which cell the caret landed in.
+  it("Tab moves the caret to the next cell", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "a");
+
+    pressKey(editor, "Tab");
+    editor.commands.insertContent("x");
+
+    expect(squeeze(saveNote(editor))).toBe("| a | x |\n| --- | --- |\n| 1 | 2 |");
+    editor.destroy();
+  });
+
+  it("Tab at the end of a row continues in the first cell of the next row", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "b");
+
+    pressKey(editor, "Tab");
+    editor.commands.insertContent("x");
+
+    expect(squeeze(saveNote(editor))).toBe("| a | b |\n| --- | --- |\n| x | 2 |");
+    editor.destroy();
+  });
+
+  it("Shift-Tab moves the caret to the previous cell", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "b");
+
+    pressKey(editor, "Tab", { shiftKey: true });
+    editor.commands.insertContent("x");
+
+    expect(squeeze(saveNote(editor))).toBe("| x | b |\n| --- | --- |\n| 1 | 2 |");
+    editor.destroy();
+  });
+
+  it("Shift-Tab at the start of a row goes back to the last cell of the row above", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "1");
+
+    pressKey(editor, "Tab", { shiftKey: true });
+    editor.commands.insertContent("x");
+
+    expect(squeeze(saveNote(editor))).toBe("| a | x |\n| --- | --- |\n| 1 | 2 |");
+    editor.destroy();
+  });
+
+  it("Tab stays a table keypress: the table is still a pipe table afterwards", () => {
+    const editor = createEditor(TABLE);
+    caretAfter(editor, "a");
+    pressKey(editor, "Tab");
+    expect(saveNote(editor)).not.toContain("<table");
+    editor.destroy();
+  });
+
+  // Control for the Enter tests above: the same keypress outside a table must
+  // still split the block, or they would pass on a dead keymap.
   it("Enter outside a table still splits the block", () => {
     const editor = createEditor("one");
     caretAfter(editor, "one");

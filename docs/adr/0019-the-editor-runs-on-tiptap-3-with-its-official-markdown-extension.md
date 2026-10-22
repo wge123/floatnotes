@@ -11,9 +11,10 @@ re-derived (study: `~/Developer/Study/.dossiers/stablyai__orca.md`).
 
 ## Consequences
 
-- Every extension that hooked markdown-it (empty-task parsing, paste
-  conversion) is rebuilt on marked tokenizers, and the abandoned
-  search-and-replace plugin is replaced by a local one.
+- Every extension that hooked markdown-it is rebuilt: empty-task parsing on
+  a marked tokenizer, paste conversion as a `handlePaste` plugin that reads
+  the text through the editor's own markdown parser (not a tokenizer), and
+  the abandoned search-and-replace plugin is replaced by a local one.
 - Style overrides keep today's spelling where TipTap 3 would change it:
   underline stays `<u>`, a bare URL stays `<https://…>`, and intraword
   underscores are not escaped.

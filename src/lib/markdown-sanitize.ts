@@ -30,6 +30,10 @@ export function sanitizeDoc(node: JSONContent): JSONContent {
   const next: JSONContent = { ...node };
 
   if (node.marks && node.marks.length > 1) {
+    // The parser adds a parent's mark after its children's, so the array runs
+    // innermost first and keeping the first of a type keeps the innermost. For
+    // links that is the one a reader clicks (`[a [b](in) c](out)`: `b` keeps
+    // `in`, `a` and `c` keep `out`); a text node cannot hold two links.
     const seen = new Set<string>();
     next.marks = node.marks.filter((m) => {
       if (seen.has(m.type)) return false;

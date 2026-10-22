@@ -28,6 +28,24 @@ describe("saves keep today's spelling", () => {
     expect(roundTrip(source)).toBe(source);
   });
 
+  // A reference definition `[x]: url` makes marked read the inner `[x]` of
+  // `[[x]]` as a link. Wikilinks are literal text whatever the note defines.
+  it.each([
+    ["[[x]]\n\n[x]: https://example.com", "[[x]]"],
+    ["see [[x]] and [[y]] here\n\n[x]: https://x.example\n[y]: https://y.example", "see [[x]] and [[y]] here"],
+    ["[[folder/Note|alias]]\n\n[folder/Note|alias]: https://e.com", "[[folder/Note|alias]]"],
+    ["[[x]] and [x] and [[x]]\n\n[x]: https://example.com", "[[x]] and [x](https://example.com) and [[x]]"],
+  ])("keeps the wikilink in %j literal even with a matching definition", (source, expected) => {
+    const out = roundTrip(source);
+    expect(out).toContain(expected);
+    expect(out).not.toContain("\\[");
+    expect(out).not.toContain("[[x](");
+  });
+
+  it("still reads `[[1]](url)` as a link whose text is `[1]`", () => {
+    expect(roundTrip("see [[1]](https://e.com) here")).toBe("see [[1]](https://e.com) here");
+  });
+
   it.each(["snake_case_word", "file_name.md", "a_b and c_d_e"])(
     "keeps %j without \\_",
     (source) => {
@@ -57,13 +75,22 @@ describe("saves keep today's spelling", () => {
     ed.destroy();
   });
 
+  // `++` in prose is not underline: the stock tokenizer paired the two `++` of
+  // "CAM++ (a) ... CAM++ (b)" and trimmed the space inside, changing the text.
+  // A pair opens only before a non-space, not right after a letter or digit,
+  // and closes only after a non-space.
+  it.each([
+    "CAM++ (a, ~7.2M) x. then CAM++ (b)",
+    "C++, Java and C++",
+    "x ++ y ++ z",
+    "i++ and j++",
+  ])("leaves ++ in prose alone: %j", (source) => {
+    expect(roundTrip(source)).toBe(source);
+  });
+
   it("keeps ++ for underlined text that <u> would read back as raw HTML", () => {
     // `<u>` content is raw HTML on load, so an escape inside it would come
     // back as a literal backslash and grow on every save.
-    const source = "CAM++ (a, ~7.2M) x. then CAM++ (b)";
-    const once = roundTrip(source);
-    expect(once).toBe("CAM++(a, ~7.2M) x. then CAM++ (b)");
-    expect(roundTrip(once)).toBe(once);
     const starred = roundTrip("x ++snake_case and *star*++ y");
     expect(starred).toContain("++");
     expect(roundTrip(starred)).toBe(starred);

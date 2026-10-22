@@ -42,6 +42,10 @@ describe("saves keep today's spelling", () => {
     expect(out).not.toContain("[[x](");
   });
 
+  it("still reads `[[1]](url)` as a link whose text is `[1]`", () => {
+    expect(roundTrip("see [[1]](https://e.com) here")).toBe("see [[1]](https://e.com) here");
+  });
+
   it.each(["snake_case_word", "file_name.md", "a_b and c_d_e"])(
     "keeps %j without \\_",
     (source) => {

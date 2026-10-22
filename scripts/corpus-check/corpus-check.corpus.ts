@@ -75,6 +75,7 @@ function withEditor<T>(text: string, fn: (e: Editor, fm: FrontMatter | null) => 
     element: document.createElement("div"),
     extensions: buildEditorExtensions(),
     content,
+    contentType: "markdown",
   });
   try {
     return fn(editor, frontMatter);
@@ -87,9 +88,17 @@ function readFacts(editor: Editor, fm: FrontMatter | null): NoteFacts {
   const links: string[] = [];
   const images: string[] = [];
   let hardBreaks = 0;
-  editor.state.doc.descendants((node) => {
+  editor.state.doc.descendants((node, _pos, parent, index) => {
     if (node.type.name === "image") images.push(String(node.attrs.src ?? ""));
-    if (node.type.name === "hardBreak") hardBreaks++;
+    // A break at the end of its block says nothing in markdown (it renders as
+    // no break at all), so it is not content.
+    if (
+      node.type.name === "hardBreak" &&
+      parent &&
+      index < parent.childCount - 1
+    ) {
+      hardBreaks++;
+    }
     for (const m of node.marks) {
       if (m.type.name === "link") links.push(String(m.attrs.href ?? ""));
     }

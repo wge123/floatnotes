@@ -10,6 +10,7 @@ import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskList } from "./empty-task-parse";
 import { LinkClick } from "./link-click";
+import { MarkdownPaste } from "./markdown-paste";
 import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
 import {
@@ -90,6 +91,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     // and draws widgets, and hooks no other extension's rules. ADR 0005's
     // post-v1 reveal-on-caret.
     RevealMarkers,
+    MarkdownPaste,
     EditorKeymap,
   ];
 }

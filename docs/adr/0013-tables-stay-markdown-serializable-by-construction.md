@@ -33,9 +33,10 @@ warn in the status bar, or allow it silently.
   with `withHeaderRow: false` it serializes to a raw `<table>` blob.
 - No merge/split-cell control is exposed, and there is no header-row-off
   toggle, so `colspan`/`rowspan` are unreachable from the UI.
-- `Enter` inside a table cell does nothing. It was the one keystroke that
-  turned a good table into an HTML blob, by splitting the cell's paragraph in
-  two. `Tab`/`Shift-Tab` still move between cells.
+- `Enter` inside a table cell never splits the cell. It was the one keystroke
+  that turned a good table into an HTML blob, by splitting the cell's paragraph
+  in two. (ADR 0019 replaced "does nothing" with "moves to the cell below".)
+  `Tab`/`Shift-Tab` still move between cells.
 
 Restricting the cell schema to a single paragraph (`TableCell.extend({ content:
 "paragraph" })`) was tried first and **rejected**: it does not prevent the

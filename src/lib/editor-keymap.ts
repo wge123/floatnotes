@@ -1,5 +1,13 @@
 import { Extension } from "@tiptap/core";
 
+import { TextSelection } from "@tiptap/pm/state";
+import {
+  isInTable,
+  moveCellForward,
+  nextCell,
+  selectionCell,
+} from "@tiptap/pm/tables";
+
 import { insertTable } from "./format";
 
 /**
@@ -50,15 +58,29 @@ export const EditorKeymap = Extension.create({
         return true;
       },
 
-      // A cell holding two blocks is not pipe-serializable (ADR 0013; TipTap 3
-      // flattens the blocks into one line joined by <br>, which ticket 08
-      // revisits). Enter is the one-keystroke route into that state, so inside
-      // a cell it does nothing at all; Tab and Shift-Tab
-      // (bound by the Table extension) still move between cells. Outside a
-      // table this returns false and the default Enter handling runs.
-      Enter: () =>
-        this.editor.isActive("tableCell") ||
-        this.editor.isActive("tableHeader"),
+      // Enter in a cell moves to the same column in the next row, and does
+      // nothing in the last row (ADR 0019, superseding ADR 0013's no-op). A
+      // cell holding two blocks is not pipe-serializable, so Enter must never
+      // split one. Outside a table this returns false and the default Enter
+      // handling runs.
+      Enter: () => {
+        const { state, view } = this.editor;
+        if (!isInTable(state)) return false;
+        const below = nextCell(selectionCell(state), "vert", 1);
+        if (below) {
+          view.dispatch(
+            state.tr
+              .setSelection(
+                TextSelection.near(
+                  state.doc.resolve(moveCellForward(below).pos - 1),
+                  -1,
+                ),
+              )
+              .scrollIntoView(),
+          );
+        }
+        return true;
+      },
 
       // Lists
       "Mod-Shift-7": () => this.editor.commands.toggleOrderedList(),

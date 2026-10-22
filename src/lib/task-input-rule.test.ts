@@ -5,20 +5,10 @@ import { buildEditorExtensions, serializeMarkdown } from "./editor-extensions";
 
 let editor: Editor;
 
-/**
- * SearchAndReplace is excluded HERE ONLY: under vitest (not production —
- * verified live) the plugin's direct "prosemirror-view" import loads a
- * second module instance (ESM/CJS dual-package hazard), whose foreign
- * DecorationSet crashes prosemirror-view on empty docs — and these tests
- * must start from an empty doc to simulate typing. It contributes nothing
- * to input-rule behavior.
- */
 function createEditor(content = ""): Editor {
   editor = new Editor({
     element: document.createElement("div"),
-    extensions: buildEditorExtensions().filter(
-      (e) => e.name !== "searchAndReplace",
-    ),
+    extensions: buildEditorExtensions(),
     content,
   });
   return editor;

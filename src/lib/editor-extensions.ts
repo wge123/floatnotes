@@ -1,4 +1,4 @@
-import SearchAndReplace from "@sereneinserenade/tiptap-search-and-replace";
+import { Search } from "./search-extension";
 import type { Editor } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
@@ -101,10 +101,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
       transformPastedText: true,
       transformCopiedText: true,
     }),
-    SearchAndReplace.configure({
-      searchResultClass: "search-result", // styled in App.css
-      disableRegex: true, // FindBar is a literal-text find
-    }),
+    Search, // literal-text find; classes styled in App.css
     // Decoration-only, so position in this list is free: it reads the selection
     // and draws widgets, and hooks no other extension's rules. ADR 0005's
     // post-v1 reveal-on-caret.

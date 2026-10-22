@@ -78,3 +78,26 @@ describe("text after a code fence inside a list item", () => {
     expect(() => editor.state.doc.check()).not.toThrow();
   });
 });
+
+describe("one markdown parser per editor", () => {
+  const registered = () => {
+    const e = new Editor({
+      element: document.createElement("div"),
+      extensions: buildEditorExtensions(),
+      content: "x",
+      contentType: "markdown",
+    });
+    const ext = e.markdown!.instance.defaults.extensions as { block?: unknown[] } | null;
+    const count = ext?.block?.length ?? 0;
+    e.destroy();
+    return count;
+  };
+
+  // TipTap registers its tokenizers into one shared parser by default, so each
+  // editor built made the next slower for the life of the process.
+  it("does not pile one editor's tokenizers onto the next", () => {
+    const first = registered();
+    expect(first).toBeGreaterThan(0);
+    expect(registered()).toBe(first);
+  });
+});

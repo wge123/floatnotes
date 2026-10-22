@@ -542,6 +542,30 @@ mod tests {
     }
 
     #[test]
+    fn title_skips_a_leading_front_matter_block() {
+        let note = "---\ntitle: Weekly\ntags: [a]\n---\n\n# Real title\nbody";
+        assert_eq!(derive_title(note), "Real title");
+        assert_eq!(derive_title("---\r\na: 1\r\n---\r\nFirst line"), "First line");
+        // Front matter only: the empty-note rule applies.
+        assert_eq!(derive_title("---\na: 1\n---\n"), "Untitled");
+        assert_eq!(derive_title("---\na: 1\n---"), "Untitled");
+    }
+
+    #[test]
+    fn title_without_front_matter_is_unchanged_by_dashes() {
+        // Not front matter: no closing fence, or the fence is not line one.
+        assert_eq!(derive_title("---\nno closing fence"), "---");
+        assert_eq!(derive_title("intro\n---\nrule above"), "intro");
+        assert_eq!(derive_title("\n---\na: 1\n---\nx"), "---");
+    }
+
+    #[test]
+    fn snippet_skips_front_matter_too() {
+        let note = "---\na: 1\n---\n# Title\nline one\nline two";
+        assert_eq!(derive_snippet(note), "line one\nline two");
+    }
+
+    #[test]
     fn slugs_are_lowercase_dashed_and_bounded() {
         assert_eq!(slugify("Hello World!"), "hello-world");
         assert_eq!(slugify("  ---  "), "note");

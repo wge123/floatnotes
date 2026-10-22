@@ -1,5 +1,6 @@
 import { TaskList } from "@tiptap/extension-list";
 
+import { alignContinuations, foldContinuations } from "./task-continuation";
 import { originalRaw } from "./tokenizer-raw";
 
 /**
@@ -31,15 +32,15 @@ export const EmptyTaskList = TaskList.extend({
       // position really starts a task item.
       if (!TASK_START.test(src)) return undefined;
       const lines = src.split("\n");
-      if (!lines.some((line) => BARE_TASK_LINE.test(line))) {
-        return base.tokenize(src, tokens, lexer);
-      }
-      const padded = lines.map((line) =>
+      const prepared = alignContinuations(lines).map((line) =>
         BARE_TASK_LINE.test(line) ? `${line} ` : line,
       );
-      const token = base.tokenize(padded.join("\n"), tokens, lexer);
+      const token = base.tokenize(prepared.join("\n"), tokens, lexer);
       if (!token) return token;
+      // The lexer advances by `raw`'s length, so it must be the source text
+      // actually consumed, not the padded or re-indented copy.
       token.raw = originalRaw(lines, token.raw ?? "");
+      foldContinuations(token as never, lexer);
       return token;
     },
   },

@@ -18,7 +18,7 @@ Floating markdown scratch-notes app for macOS (free Raycast-Notes-style replacem
 
 ## Reference
 
-- Studied upstream: `~/Developer/Study/.dossiers/willzeng274__free-raycast-notes.md` (repo dossier for willzeng274/free-raycast-notes — architecture, gotchas, patterns to borrow).
+- Studied upstream: `~/Developer/Study/.dossiers/stablyai__orca.md` (repo dossier for stablyai/orca — its TipTap 3 markdown editor is the reference for ours, ADR 0019).
 
 ## Commands
 

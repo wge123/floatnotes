@@ -34,7 +34,10 @@ mutating the live inbox for read-mostly checks.
    dead id toasts "note not found" and falls back.
 2. **Type + autosave + disk** — type text, wait 600ms, `cat` the `.md` file:
    content present, title = first line. External edit to the file (clean note)
-   silently reloads; external edit while dirty resolves via 409 → "reloaded".
+   silently reloads; external edit while dirty resolves via 409: the disk
+   version is swapped in and the unsaved text is kept as a new note, with a
+   banner naming its path ("reloaded, changed on disk" toasts only when the
+   disk text equals what was typed). Nothing typed is ever lost.
 3. **Todos (regression: this doc's origin)** — type `- [ ] x` → checkbox
    appears; type `[x] y` on a fresh line → checked item; click checkbox →
    toggles + persists to disk as `- [x]`; reload → still a checkbox, never

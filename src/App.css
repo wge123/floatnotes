@@ -41,7 +41,7 @@ body {
    and carries real information — it disappears the moment focus moves to the
    find bar or an overlay. The side gutters (1rem each) are this element's own
    padding, not the scroll container's, so a click in either gutter lands in the
-   editor. The rail is a background stripe 0.5rem in, in the gutter rather than
+   editor. The rail is a box-shadow stripe 0.5rem in, in the gutter rather than
    on top of the first character; text sits 1rem from the edge. */
 .floatnotes-editor .tiptap {
   flex: 1 0 auto;
@@ -51,8 +51,11 @@ body {
 }
 
 .floatnotes-editor .tiptap:focus-visible {
-  /* blue-600 */
-  background: linear-gradient(#2563eb, #2563eb) 0.5rem 0 / 2px 100% no-repeat;
+  /* A white inset shadow (the note area is bg-white) covers the first 0.5rem,
+     then a blue-600 one 2px wider paints the rail, so it sits 0.5rem in. */
+  box-shadow:
+    inset 0.5rem 0 0 0 #fff,
+    inset calc(0.5rem + 2px) 0 0 0 #2563eb;
 }
 
 /* The three overlay search fields (note switcher, action panel, find bar) are

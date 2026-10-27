@@ -65,7 +65,8 @@ mutating the live inbox for read-mostly checks.
    guards it. If that regression ever returns, `:1420` is the fallback: it
    serves the identical app and `api.ts` routes its API calls back to 4949.)
 10. **Zoom** — ⌘+/⌘-/⌘0 scale and persist; reload keeps zoom.
-11. **Click-anywhere** — clicking empty space below content, or in the left (x=3) or right (x=width-10) gutter, focuses the editor
+11. **Click-anywhere** — clicking empty space below content, or in the left
+    (x=3) or right (x=width-10) gutter, focuses the editor
     with caret at end (regression: fill-height fix).
 12. **Empty-doc stability** — ⌘A Delete leaves a working editor; keep typing
     (regression: prosemirror decoration crash class).

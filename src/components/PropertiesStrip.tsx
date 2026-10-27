@@ -18,7 +18,7 @@ export default function PropertiesStrip({ yaml, onChange }: PropertiesStripProps
   const preview = yaml.split("\n").find((line) => line.trim() !== "") ?? "";
 
   return (
-    <div className="mb-2 shrink-0 rounded border border-gray-200 bg-gray-50 text-xs text-gray-600">
+    <div className="mx-4 mb-2 shrink-0 rounded border border-gray-200 bg-gray-50 text-xs text-gray-600">
       <button
         type="button"
         aria-expanded={expanded}

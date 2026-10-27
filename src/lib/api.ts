@@ -77,7 +77,7 @@ export function apiBase(): string {
 
 /** Link to a note on the server this app is actually running against. */
 export function deeplinkUrl(id: string): string {
-  return `${apiBase()}/?note=${id}`;
+  return `${apiBase()}/?note=${encodeURIComponent(id)}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

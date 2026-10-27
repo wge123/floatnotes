@@ -10,7 +10,14 @@ describe("deeplinkUrl", () => {
 
   it("points at a FLOATNOTES_PORT override when the page is served by that server", () => {
     at("http:", "4960", "http://localhost:4960");
-    expect(deeplinkUrl("a/b")).toBe("http://localhost:4960/?note=a/b");
+    expect(deeplinkUrl("a/b")).toBe("http://localhost:4960/?note=a%2Fb");
+  });
+
+  it("round-trips an id with reserved characters through URLSearchParams", () => {
+    at("http:", "4949", "http://localhost:4949");
+    const id = "a&b #c+d%e.md";
+    expect(new URL(deeplinkUrl(id)).searchParams.get("note")).toBe(id);
+    expect(new URL(deeplinkUrl("a/b")).searchParams.get("note")).toBe("a/b");
   });
 
   it("points at the default server on :4949", () => {

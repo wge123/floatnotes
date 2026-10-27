@@ -12,7 +12,8 @@ const inTauri = "__TAURI_INTERNALS__" in window;
  * because a note is just a file anyone can write: `[click me](javascript:...)`
  * is a document the editor must be able to load without handing the WebView a
  * script to run. Relative links (`./other.md`) fall through too, since they
- * have no meaning to the OS opener and note-to-note linking does not exist yet.
+ * have no meaning to the OS opener, and no note-to-note navigation is wired to them
+ * (`[[wikilinks]]` open notes through lib/wikilink.ts instead).
  */
 const OPENABLE = /^(https?|mailto|tel):/i;
 

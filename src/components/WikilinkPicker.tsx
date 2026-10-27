@@ -56,13 +56,18 @@ export default function WikilinkPicker({ candidates, onOpen, onClose }: Wikilink
           tabIndex={0}
           role="listbox"
           aria-label="Matching notes"
+          aria-activedescendant={`wikilink-option-${selected}`}
           onKeyDown={onKeyDown}
           className="floatnotes-focus-inset min-h-0 flex-1 overflow-auto py-1"
         >
           {candidates.map((note, index) => (
-            <li key={note.id} role="option" aria-selected={index === selected}>
+            <li key={note.id} id={`wikilink-option-${index}`} role="option" aria-selected={index === selected}>
               <button
                 type="button"
+                // Not a tab stop: the listbox holds focus and the highlight
+                // (arrows, aria-activedescendant) is what Enter opens.
+                tabIndex={-1}
+                title={note.id}
                 onClick={() => onOpen(note)}
                 onMouseEnter={() => setSelected(index)}
                 className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm ${

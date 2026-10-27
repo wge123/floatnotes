@@ -39,17 +39,20 @@ body {
    accent rail down the leading edge is painted on the focused element itself
    (so an automated focus-visibility sweep sees it), stays quiet while typing,
    and carries real information — it disappears the moment focus moves to the
-   find bar or an overlay. The negative margin lets the rail sit in the host's
-   px-4 gutter instead of on top of the first character; text does not move. */
+   find bar or an overlay. The side gutters (1rem each) are this element's own
+   padding, not the scroll container's, so a click in either gutter lands in the
+   editor. The rail is a background stripe 0.5rem in, in the gutter rather than
+   on top of the first character; text sits 1rem from the edge. */
 .floatnotes-editor .tiptap {
   flex: 1 0 auto;
-  margin-left: -0.5rem;
-  padding-left: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   outline: none; /* replaced by the rail below, not removed outright */
 }
 
 .floatnotes-editor .tiptap:focus-visible {
-  box-shadow: inset 2px 0 0 0 #2563eb; /* blue-600 */
+  /* blue-600 */
+  background: linear-gradient(#2563eb, #2563eb) 0.5rem 0 / 2px 100% no-repeat;
 }
 
 /* The three overlay search fields (note switcher, action panel, find bar) are

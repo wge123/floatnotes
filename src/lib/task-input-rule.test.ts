@@ -72,4 +72,39 @@ describe("typing todos (Raycast parity)", () => {
     type(ed, "[ ] standalone");
     expect(ed.getJSON().content?.[0]?.type).toBe("taskList");
   });
+
+  function pressEnter(ed: Editor): void {
+    const ev = new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, bubbles: true });
+    const handled = ed.view.someProp("handleKeyDown", (f) => f(ed.view, ev));
+    expect(handled).toBe(true);
+  }
+
+  it("'[x] ' at the start of a new task item checks it, not nested", () => {
+    const ed = createEditor();
+    type(ed, "- [ ] a");
+    pressEnter(ed);
+    type(ed, "[x] b");
+    const list = ed.getJSON().content?.[0];
+    expect(list?.type).toBe("taskList");
+    expect(list?.content?.length).toBe(2);
+    expect((list?.content?.[1] as { attrs?: { checked?: boolean } }).attrs?.checked).toBe(true);
+    expect(saveNote(ed)).toBe("- [ ] a\n- [x] b");
+  });
+
+  it("'[ ] ' at the start of a new task item leaves it unchecked and consumes the marker", () => {
+    const ed = createEditor();
+    type(ed, "- [x] a");
+    pressEnter(ed);
+    type(ed, "[ ] b");
+    expect(saveNote(ed)).toBe("- [x] a\n- [ ] b");
+  });
+
+  it("'[x] ' then '[ ] ' retypes the same item without nesting", () => {
+    const ed = createEditor();
+    type(ed, "- [ ] a");
+    pressEnter(ed);
+    type(ed, "[x] ");
+    type(ed, "[ ] b");
+    expect(saveNote(ed)).toBe("- [ ] a\n- [ ] b");
+  });
 });

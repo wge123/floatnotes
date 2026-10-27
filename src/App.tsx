@@ -10,6 +10,8 @@ import FindBar from "./components/FindBar";
 import FormatBar from "./components/FormatBar";
 import Explorer from "./components/Explorer";
 import NoteSwitcher from "./components/NoteSwitcher";
+import WikilinkPicker from "./components/WikilinkPicker";
+import { resolveWikilink } from "./lib/wikilink";
 import StatusBar from "./components/StatusBar";
 import TitleBar from "./components/TitleBar";
 import { api, deeplinkUrl, type Note, type NoteMeta, type Sidecar } from "./lib/api";
@@ -86,7 +88,7 @@ function bootNote(deeplinkId: string | null): Promise<Note> {
   return bootPromise;
 }
 
-type OverlayId = "switcher" | "action-panel" | "find" | "explorer";
+type OverlayId = "switcher" | "action-panel" | "find" | "explorer" | "wikilink";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 /**
@@ -421,6 +423,27 @@ function App() {
       }
     },
     [openNote, showToast],
+  );
+
+  /** The notes a Cmd-clicked wikilink could mean, while the picker is open. */
+  const [wikilinkCandidates, setWikilinkCandidates] = useState<NoteMeta[]>([]);
+  const openWikilink = useCallback(
+    async (target: string) => {
+      try {
+        const matches = resolveWikilink(target, await api.list());
+        if (matches.length === 0) {
+          showToast(`no note named ${target.split("|")[0].trim()}`);
+        } else if (matches.length === 1) {
+          await openNoteById(matches[0].id);
+        } else {
+          setWikilinkCandidates(matches);
+          openOverlay("wikilink");
+        }
+      } catch (error) {
+        showToast(`could not open link: ${error}`);
+      }
+    },
+    [openNoteById, openOverlay, showToast],
   );
 
   // Boot: ?note=<id> deeplink when present, else most-recent note, else the
@@ -966,6 +989,7 @@ function App() {
               editorRef.current = editor;
               setEditorInstance(editor);
             }}
+            onWikilink={(target) => void openWikilink(target)}
             placeholder="Start typing…"
           />
         )}
@@ -999,6 +1023,16 @@ function App() {
           }}
           onDelete={(target) => void deleteWithUndo(target)}
           onClose={() => closeOverlay("switcher")}
+        />
+      )}
+      {overlays.includes("wikilink") && (
+        <WikilinkPicker
+          candidates={wikilinkCandidates}
+          onOpen={(picked) => {
+            closeOverlay("wikilink");
+            void openNoteById(picked.id);
+          }}
+          onClose={() => closeOverlay("wikilink")}
         />
       )}
       {overlays.includes("explorer") && (

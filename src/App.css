@@ -203,6 +203,14 @@ body {
   outline: 1.5px solid rgb(234 88 12); /* orange-600 */
 }
 
+/* Wikilinks (lib/wikilink.ts): a decoration over the literal `[[…]]` text, so the
+   saved markdown is unchanged. Same blue-700 underline family as a link. */
+.floatnotes-editor .wikilink {
+  color: rgb(29 78 216); /* blue-700 */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Reveal-on-caret markdown markers (RevealMarkers, see lib/reveal-markers.ts).
    Widget decorations, never document text, so they must read as scenery: dimmed
    enough to stay out of the way of the prose, opaque enough to be legible while

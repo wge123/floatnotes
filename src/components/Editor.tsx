@@ -21,6 +21,8 @@ export interface EditorProps {
   onChange: (markdown: string) => void;
   /** Fires with the live TipTap editor, and with null when it is destroyed. */
   onReady?: (editor: TiptapEditor | null) => void;
+  /** Cmd/Ctrl-click on a `[[wikilink]]`, with the text between the brackets. */
+  onWikilink?: (target: string) => void;
   placeholder?: string;
 }
 
@@ -33,8 +35,12 @@ export default function Editor({
   value,
   onChange,
   onReady,
+  onWikilink,
   placeholder,
 }: EditorProps) {
+  // The extension list is built once, so it calls through a ref to stay current.
+  const onWikilinkRef = useRef(onWikilink);
+  onWikilinkRef.current = onWikilink;
   // Front matter is split off here and written back unchanged on every save
   // (ADR 0018). The ref is what handlers read; the state re-renders the strip.
   const [loaded] = useState(() => loadNote(value));
@@ -42,7 +48,7 @@ export default function Editor({
   const [frontMatter, setFrontMatter] = useState(loaded.frontMatter);
 
   const editor = useEditor({
-    extensions: buildEditorExtensions(placeholder),
+    extensions: buildEditorExtensions(placeholder, (target) => onWikilinkRef.current?.(target)),
     content: loaded.content,
     // A bare string is HTML in TipTap 3.
     contentType: "markdown",

@@ -10,6 +10,7 @@ import { type FrontMatter, splitFrontMatter } from "./front-matter";
 import { EditorKeymap } from "./editor-keymap";
 import { EmptyTaskList } from "./empty-task-list";
 import { LinkClick } from "./link-click";
+import { Wikilink } from "./wikilink";
 import { MarkdownPaste } from "./markdown-paste";
 import { RevealMarkers } from "./reveal-markers";
 import { NoteHardBreak } from "./hard-break-markdown";
@@ -39,7 +40,10 @@ import { TrailingParagraph, getSerializationDocument } from "./trailing-paragrap
  * Content must be loaded with `contentType: "markdown"` (the editor option, and
  * `setContent`'s option): a bare string is parsed as HTML in TipTap 3.
  */
-export function buildEditorExtensions(placeholder = "Start writing…") {
+export function buildEditorExtensions(
+  placeholder = "Start writing…",
+  onWikilink: ((target: string) => void) | null = null,
+) {
   installParseSanitizer();
   installPlainTextEncoder();
   return [
@@ -89,6 +93,7 @@ export function buildEditorExtensions(placeholder = "Start writing…") {
     RawBlock,
     RawInline,
     WikiLinkText,
+    Wikilink.configure({ onOpen: onWikilink }),
     Placeholder.configure({ placeholder }),
     // A private marked instance per editor. The default is one shared global
     // that every editor registers its tokenizers into, so each editor built in

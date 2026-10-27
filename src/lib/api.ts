@@ -75,6 +75,11 @@ export function apiBase(): string {
   return "http://127.0.0.1:4949";
 }
 
+/** Link to a note on the server this app is actually running against. */
+export function deeplinkUrl(id: string): string {
+  return `${apiBase()}/?note=${id}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
     ...init,

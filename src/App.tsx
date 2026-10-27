@@ -12,7 +12,7 @@ import Explorer from "./components/Explorer";
 import NoteSwitcher from "./components/NoteSwitcher";
 import StatusBar from "./components/StatusBar";
 import TitleBar from "./components/TitleBar";
-import { api, type Note, type NoteMeta, type Sidecar } from "./lib/api";
+import { api, deeplinkUrl, type Note, type NoteMeta, type Sidecar } from "./lib/api";
 import {
   hidePanel,
   installAppKeymap,
@@ -807,7 +807,7 @@ function App() {
         const n = noteRef.current;
         if (!n) return;
         navigator.clipboard
-          .writeText(`http://localhost:4949/?note=${n.id}`)
+          .writeText(deeplinkUrl(n.id))
           .then(() => showToast("deeplink copied"))
           .catch((error: unknown) => showToast(`copy failed: ${error}`));
       },

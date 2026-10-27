@@ -12,6 +12,7 @@ const notes = [
   meta("folder/Deep note"),
   meta("x"),
   meta("a"),
+  meta("Folder/Memo"),
   meta("one/00-index"),
   meta("two/00-index"),
 ];
@@ -30,5 +31,7 @@ describe("resolveWikilink", () => {
   });
   it("returns every note sharing a basename", () =>
     expect(ids("00-index")).toEqual(["one/00-index", "two/00-index"]));
+  it("matches a path with .md", () => expect(ids("Folder/Memo.md")).toEqual(["Folder/Memo"]));
+  it("matches the folder case-insensitively", () => expect(ids("folder/memo")).toEqual(["Folder/Memo"]));
   it("returns nothing for an unknown name", () => expect(ids("nope")).toEqual([]));
 });
